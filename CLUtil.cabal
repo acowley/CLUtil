@@ -1,0 +1,26 @@
+Name:                CLUtil
+Version:             0.1
+Synopsis:            A thin abstraction layer over the OpenCL library.
+Homepage:            http://github.com/acowley/CLUtil
+License:             BSD3
+License-file:        LICENSE
+Author:              Anthony Cowley
+Maintainer:          acowley@gmail.com
+Category:            System
+Build-type:          Simple
+Cabal-version:       >=1.2
+
+Extra-Source-Files: examples/QuasiCrystalDisplay.hs, 
+                    examples/QuasiCrystalRGBA.cl,
+                    examples/TestEZ.hs,
+                    examples/VecEZ.cl,
+                    examples/VecEZ2.cl
+
+Library
+  Exposed-modules:     System.GPU.CLUtil
+  HS-Source-Dirs:      src
+  Build-depends:       base >= 4.2,
+                       bytestring,
+                       vector >= 0.7,
+                       OpenCL >= 1.0.2.4
+                       
