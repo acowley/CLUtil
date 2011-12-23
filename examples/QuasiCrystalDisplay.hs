@@ -34,4 +34,7 @@ main = do s <- ezInit CL_DEVICE_TYPE_ALL
                                       numAngles allAngles
                                       (Out (numPix*4)) (Work2D pixels pixels)
               {-# NOINLINE frame #-}
-          animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
+          -- gloss 1.6 API
+          -- animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
+          -- gloss 1.5 API
+          animateInWindow "Quasicrystal" (pixels,pixels) (0,0) black frame
