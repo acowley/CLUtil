@@ -4,7 +4,7 @@ the use of OpenCL with Vectors.
 
 Example usage:
 
-     import CLUtil
+     import System.GPU.CLUtil
      import qualified Data.Vector.Storable as V
      
      test1 = do s <- ezInit CL_DEVICE_TYPE_CPU
