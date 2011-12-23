@@ -21,7 +21,7 @@ mkPicture = flip (bitmapOfForeignPtr pixels pixels) False
           . (\(x,_,_) -> x)
           . V.unsafeToForeignPtr
 
-main = do s <- ezInit CL_DEVICE_TYPE_GPU
+main = do s <- ezInit CL_DEVICE_TYPE_ALL
           k <- kernelFromFile s "QuasiCrystalRGBA.cl" "quasiCrystal"
           let numPix = pixels * pixels
               pixels' = fromIntegral pixels :: CInt
