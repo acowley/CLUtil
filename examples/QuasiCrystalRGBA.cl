@@ -16,7 +16,7 @@ __kernel void quasiCrystal(int pixels,
   for(int i = 0; i < numAngles; ++i) {
     sum += wave(phase, angles[i], u, v);
   }
-  uchar r = (uchar)(255.0f * clamp(wrap(sum), 0, 1));
+  uchar r = (uchar)(255.0f * clamp(wrap(sum), 0.0f, 1.0f));
   vstore4((uchar4)(255,r,128,r), y*pixels + x, img);
 }
 
