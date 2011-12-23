@@ -4,7 +4,7 @@
 module System.GPU.CLUtil 
   (vectorToBuffer, bufferToVector, bufferToVectorAsync,
    ezInit, ezRelease, loadProgram, kernelFromFile,
-   OutputSize(..), NumWorkItems(..),
+   OutputSize(..), NumWorkItems(..), OpenCLState(..),
    localFloat, localDouble, localInt, runKernel,
    module System.GPU.OpenCL, Vector, CInt) where
 import System.GPU.OpenCL
