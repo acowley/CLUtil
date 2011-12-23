@@ -1,7 +1,7 @@
 -- Port of the quasicrystal animation code at:
 -- http://mainisusuallyafunction.blogspot.com/2011/10/quasicrystals-as-sums-of-waves-in-plane.html
 -- This module displays the animation in gloss window.
-import CLUtil
+import System.GPU.CLUtil
 import qualified Data.Vector.Storable as V
 import Data.Word (Word8)
 import Graphics.Gloss hiding (Vector, scale)
