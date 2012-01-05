@@ -6,10 +6,11 @@ module System.GPU.CLUtil
    ezInit, ezRelease, loadProgram, kernelFromFile,
    OutputSize(..), NumWorkItems(..), OpenCLState(..),
    localFloat, localDouble, localInt, runKernel,
-   module System.GPU.OpenCL, Vector, CInt) where
+   module System.GPU.OpenCL, Vector, CInt, initOutputBuffer,
+   CLAsync(..), waitCLAsync, waitCLAsyncs, runKernelAsync) where
 import System.GPU.OpenCL
 import Control.Applicative
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Data.List (partition)
 import Data.Maybe (catMaybes)
 import Data.Vector.Storable (Vector)
@@ -43,8 +44,9 @@ bufferToVector q mem count waitForIt =
      V.unsafeFreeze v
   where sz = count * sizeOf (undefined::a)
 
--- |Asynchronously read an OpenCL memory buffer into a new
--- 'Vector'. The returned action blocks until the read is finished.
+-- |Asynchronously (and unsafely) read an OpenCL memory buffer into a
+-- new 'Vector'. The returned action blocks until the read is
+-- finished.
 bufferToVectorAsync :: forall a. Storable a => 
                   CLCommandQueue -> CLMem -> Int -> [CLEvent] -> 
                   IO (IO (Vector a))
@@ -56,6 +58,10 @@ bufferToVectorAsync q mem count waitForIt =
               clReleaseEvent readEvent >> 
               V.unsafeFreeze v
   where sz = count * sizeOf (undefined::a)
+
+-- |Allocate a buffer whose contents are undefined.
+initOutputBuffer :: Integral a => OpenCLState -> [CLMemFlag] -> a -> IO CLMem
+initOutputBuffer s flags n = clCreateBuffer (clContext s) flags (n, nullPtr)
 
 -- |A record capturing the core pieces of state needed to evaluate
 -- OpenCL kernels.
@@ -83,6 +89,7 @@ loadProgram state src = do p <- clCreateProgramWithSource (clContext state) src
                            clBuildProgram p [clDevice state] 
                                           "-cl-strict-aliasing"
                            return $ clCreateKernel p
+-- Another option for the clBuildProgram call is "-cl-fast-relaxed-math"
 
 -- |Load program source from the given file and build the named
 -- kernel.
@@ -121,8 +128,24 @@ localInt = Local
 -- Variable arguments class patterned on Printf.
 
 class KernelArgs a where
+  -- Setting an argument requires a state (device, queue, context), a
+  -- kernel, the position of the argument, the number of work items
+  -- specified so far, and a list of actions that prepare argument
+  -- buffers and return the cleanup action to take when the kernel is
+  -- finished.
   setArg :: OpenCLState -> CLKernel -> CLuint -> Maybe [Int] -> 
             [IO (Maybe PostExec)] -> a
+
+-- We use a separate class for running kernels asynchronously. This
+-- class does not have instances for returning 'Vector' values. The
+-- only possibile return value is a 'CLAsync' that the user can wait
+-- on before reading back results.
+class KernelArgsAsync a where
+  -- Identical to the setArg method of the KernelArgs class with the
+  -- addition of a list of 'CLAsync' events to wait on before
+  -- executing the kernel.
+  setArgAsync :: OpenCLState -> CLKernel -> CLuint -> Maybe [Int] ->
+                 [CLAsync] -> [IO (Maybe PostExec)] -> a
 
 data PostExec = ReadOutput (Int -> IO (CLMem,Int))
               | FreeInput (IO ())
@@ -139,6 +162,51 @@ mkRead q (mem,num) = do v <- bufferToVector q mem num []
                         clReleaseMemObject mem
                         return v
 
+-- |We need a 'CLEvent' and a list of cleanup actions to support
+-- asynchronous kernel executions.
+data CLAsync = CLAsync { asyncEvent :: CLEvent
+                       , cleanupActions :: [IO ()] }
+
+-- |Wait for an asynchronous operation to complete, then cleanup
+-- associated resources.
+waitCLAsync :: CLAsync -> IO ()
+waitCLAsync (CLAsync ev cleanup) = clWaitForEvents [ev] >>
+                                   clReleaseEvent ev >>
+                                   sequence_ cleanup
+
+-- |Wait for a list of asynchronous operations to complete, then
+-- cleanup associated resources.
+waitCLAsyncs :: [CLAsync] -> IO ()
+waitCLAsyncs asyncs = do clWaitForEvents evs
+                         mapM_ clReleaseEvent evs
+                         sequence_ $ concatMap cleanupActions asyncs
+  where evs = map asyncEvent asyncs
+
+-- Synchronous execution of a kernel with no automatic outputs. This
+-- is useful for kernels that modify user-managed buffers.
+instance KernelArgs (IO ()) where
+  setArg s k _ (Just n) prep = do
+    let q = clQueue s
+    (o, cleanup) <- partitionPost . catMaybes <$> sequence prep
+    when (not (null o)) (error "Outputs aren't bound!")
+    exec <- clEnqueueNDRangeKernel q k n [] []
+    clWaitForEvents [exec]
+    clReleaseEvent exec
+    sequence_ cleanup
+
+-- Return an event the user can wait on for a kernel to finish.
+instance KernelArgsAsync (IO CLAsync) where
+  setArgAsync s k _ (Just n) blockers prep = do
+    let q = clQueue s
+    (o, cleanup) <- partitionPost . catMaybes <$> sequence prep
+    when (not $ null o) 
+         (error "Automatic outputs not supported for async kernels!")
+    waitCLAsyncs blockers
+    exec <- clEnqueueNDRangeKernel q k n [] []
+    return $ CLAsync exec cleanup
+
+-- Execute a kernel where the calling context is expecting a single
+-- 'Vector' return value.
 instance forall a. Storable a => KernelArgs (IO (Vector a)) where
   setArg s k _ (Just n) prep = do
     let q = clQueue s
@@ -148,13 +216,15 @@ instance forall a. Storable a => KernelArgs (IO (Vector a)) where
             [f] -> do x <- f (sizeOf (undefined::a))
                       return $ mkRead q x
             _ -> error "More outputs specified than bound"
-    _ <- clFinish q
+    void $ clFinish q
     exec <- clEnqueueNDRangeKernel q k n [] []
     clWaitForEvents [exec]
     clReleaseEvent exec
     sequence_ cleanup
     r1
 
+-- Execute a kernel where the calling context is expecting two
+-- 'Vector' return values.
 instance forall a b. (Storable a, Storable b) => 
   KernelArgs (IO (Vector a, Vector b)) where
   setArg s k _ (Just n) prep = do
@@ -174,6 +244,8 @@ instance forall a b. (Storable a, Storable b) =>
     sequence_ cleanup
     (,) <$> r1 <*> r2
 
+-- Execute a kernel where the calling context is expecting three
+-- 'Vector' return values.
 instance forall a b c. (Storable a, Storable b, Storable c) => 
   KernelArgs (IO (Vector a, Vector b, Vector c)) where
   setArg s k _ (Just n) prep = do
@@ -192,11 +264,20 @@ instance forall a b c. (Storable a, Storable b, Storable c) =>
     sequence_ cleanup
     (,,) <$> r1 <*> r2 <*> r3
 
+-- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgs r) => KernelArgs (a -> r) where
   setArg s k arg n prep = \a -> let load = clSetKernelArg k arg a >> 
                                            return Nothing
                                 in setArg s k (arg+1) n (load : prep)
 
+instance (Storable a, KernelArgsAsync r) => KernelArgsAsync (a -> r) where
+  setArgAsync s k arg n blockers prep = 
+    \a -> let load = clSetKernelArg k arg a >> 
+                     return Nothing
+          in setArgAsync s k (arg+1) n blockers (load : prep)
+
+
+-- Handle 'Vector' input arguments.
 instance (Storable a, KernelArgs r) => KernelArgs (Vector a -> r) where
   setArg s k arg n prep = \v -> 
                           let load = do b <- vectorToBuffer (clContext s) v
@@ -205,9 +286,26 @@ instance (Storable a, KernelArgs r) => KernelArgs (Vector a -> r) where
                                            void (clReleaseMemObject b)
                           in setArg s k (arg+1) n (load : prep)
 
+instance (Storable a, KernelArgsAsync r) => 
+  KernelArgsAsync (Vector a -> r) where
+  setArgAsync s k arg n blockers prep = 
+    \v -> let load = do b <- vectorToBuffer (clContext s) v
+                        clSetKernelArg k arg b
+                        return . Just . FreeInput $ 
+                          void (clReleaseMemObject b)
+          in setArgAsync s k (arg+1) n blockers (load : prep)
+
+-- Keep track of an argument that specifies the number of work items
+-- to execute.
 instance KernelArgs r => KernelArgs (NumWorkItems -> r) where
   setArg s k arg _ prep = \n -> setArg s k arg (Just (workItemsList n)) prep
 
+instance KernelArgsAsync r => KernelArgsAsync (NumWorkItems -> r) where
+  setArgAsync s k arg _ blockers prep = 
+    \n -> setArgAsync s k arg (Just (workItemsList n)) blockers prep
+
+-- Handle 'Vector' outputs by automatically managing the underlying
+-- OpenCL buffers.
 instance KernelArgs r => KernelArgs (OutputSize -> r) where
   setArg s k arg n prep = 
     \(Out m) -> 
@@ -222,3 +320,9 @@ instance KernelArgs r => KernelArgs (OutputSize -> r) where
 -- 'Vector' and 'Storable' arguments, and 'Vector' outputs.
 runKernel :: KernelArgs a => OpenCLState -> CLKernel -> a
 runKernel s k = setArg s k 0 Nothing []
+
+-- |Simple interface for calling an OpenCL kernel. Supports input
+-- 'Vector' and 'Storable' arguments. Outputs a 'CLAsync' the user
+-- must wait on before inspecting output buffers.
+runKernelAsync :: KernelArgsAsync a => OpenCLState -> CLKernel -> [CLAsync] -> a
+runKernelAsync s k blockers = setArgAsync s k 0 Nothing blockers []
