@@ -185,16 +185,34 @@ waitCLAsyncs asyncs = do clWaitForEvents evs
 
 -- Preparing arguments involves providing a cleanup action (if
 -- necessary), along with a continuation for the rest of preparation.
-type PrepExec a = IO ( Maybe PostExec
-                     , IO (a, [Maybe PostExec]) -> IO (a, [Maybe PostExec]))
+-- type PrepExec a = IO ( Maybe PostExec
+--                      , IO (a, [Maybe PostExec]) -> IO (a, [Maybe PostExec]))
+
+-- type PrepCont a = [Maybe PostExec] -> IO (a, [Maybe PostExec])
+-- type PrepExec a = [Maybe PostExec] -> PrepCont a -> IO (a, [Maybe PostExec])
+
+-- So... we need to write something like
+-- \cont ->
+-- V.unsafeWith v $ \ptr -> do
+--   b <- clCreateBuffer context [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR]
+--                       (sz, castPtr ptr)
+--   clSetKernelArg k arg b
+--   cont (FreeInput (void (clReleaseMemObject b)):)
+-- where sz = V.length v * sizeOf (undefined::a)
+type PrepExec a = ([PostExec] -> IO (a, [PostExec])) -> IO (a, [PostExec])
+
+-- This isn't quite there yet!
 
 -- Nest a stack of buffer preparation actions. This lets us safely
 -- directly access the pointers underlying 'Vector' arguments.
 nestM :: IO a -> [PrepExec a] -> IO (a, [Maybe PostExec])
-nestM finish = go []
-  where go acc [] = (,) <$> finish <*> pure acc
-        go acc (m:ms) = do (pe,k) <- m
-                           k $ go (pe:acc) ms
+nestM finish = go id
+  where go f [] = (,) <$> finish <*> pure (f [])
+        go f (m:ms) = m $ go ms
+-- nestM finish = go []
+--   where go acc [] = (,) <$> finish <*> pure acc
+--         go acc (m:ms) = do (pe,k) <- m
+--                            k $ go (pe:acc) ms
 
 class KAAsync a where
   -- Identical to the setArg method of the KernelArgs class with the
@@ -343,9 +361,11 @@ instance (Storable a, KernelArgsAsync r) =>
                           void (clReleaseMemObject b)
           in setArgAsync s k (arg+1) n blockers (load : prep)
 
+{-
 instance (Storable a, KAAsync r) => KAAsync (Vector a -> r) where
   setAA s k arg n blockers prep = 
-    \v -> let load = return (Just (FreeInput $ void (clReleaseMemObject b)),
+    \v -> let load = undefined
+                     -- return (Just (FreeInput $ void (clReleaseMemObject b)),
                              -- Problem: we need to refer to b in the
                              -- cleanup action, but we don't get a b
                              -- unless we give it a pointer to our
@@ -357,7 +377,7 @@ instance (Storable a, KAAsync r) => KAAsync (Vector a -> r) where
                      --    return . Just . FreeInput $ 
                      --      void (clReleaseMemObject b)
           in setArgAsync s k (arg+1) n blockers (load : prep)
-
+-}
 
 -- Keep track of an argument that specifies the number of work items
 -- to execute.
