@@ -182,6 +182,26 @@ waitCLAsyncs asyncs = do clWaitForEvents evs
                          sequence_ $ concatMap cleanupActions asyncs
   where evs = map asyncEvent asyncs
 
+-- Preparing arguments involves providing a cleanup action (if
+-- necessary), along with a continuation for the rest of preparation.
+type PrepExec a = IO ( Maybe PostExec
+                     , IO (a, [Maybe PostExec]) -> IO (a, [Maybe PostExec]))
+
+-- Nest a stack of buffer preparation actions. This lets us safely
+-- directly access the pointers underlying 'Vector' arguments.
+nestM :: IO a -> [PrepExec a] -> IO (a, [Maybe PostExec])
+nestM finish = go []
+  where go acc [] = (,) <$> finish <*> pure acc
+        go acc (m:ms) = do (pe,k) <- m
+                           k $ go (pe:acc) ms
+
+class KAAsync a where
+  -- Identical to the setArg method of the KernelArgs class with the
+  -- addition of a list of 'CLAsync' events to wait on before
+  -- executing the kernel.
+  setAA :: OpenCLState -> CLKernel -> CLuint -> Maybe [Int] ->
+           [CLAsync] -> [PrepExec b] -> a
+
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
 instance KernelArgs (IO ()) where
@@ -203,6 +223,17 @@ instance KernelArgsAsync (IO CLAsync) where
          (error "Automatic outputs not supported for async kernels!")
     waitCLAsyncs blockers
     exec <- clEnqueueNDRangeKernel q k n [] []
+    return $ CLAsync exec cleanup
+
+-- Return an event the user can wait on for a kernel to finish.
+instance KAAsync (IO CLAsync) where
+  setAA s k _ (Just n) blockers prep = do
+    let q = clQueue s
+    waitCLAsyncs blockers
+    (exec, posts) <- nestM (clEnqueueNDRangeKernel q k n [] []) prep
+    let (o,cleanup) = partitionPost . catMaybes $ posts
+    when (not $ null o) 
+         (error "Automatic outputs not supported for async kernels!")
     return $ CLAsync exec cleanup
 
 -- Execute a kernel where the calling context is expecting a single
