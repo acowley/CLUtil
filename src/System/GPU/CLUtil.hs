@@ -1,4 +1,5 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances, 
+             RankNTypes #-}
 -- |High-level interfaces for working with 'Vector's and the OpenCL
 -- library.
 module System.GPU.CLUtil 
@@ -200,7 +201,7 @@ class KAAsync a where
   -- addition of a list of 'CLAsync' events to wait on before
   -- executing the kernel.
   setAA :: OpenCLState -> CLKernel -> CLuint -> Maybe [Int] ->
-           [CLAsync] -> [PrepExec b] -> a
+           [CLAsync] -> (forall b. [PrepExec b]) -> a
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
@@ -212,6 +213,17 @@ instance KernelArgs (IO ()) where
     exec <- clEnqueueNDRangeKernel q k n [] []
     clWaitForEvents [exec]
     clReleaseEvent exec
+    sequence_ cleanup
+
+instance KAAsync (IO ()) where
+  setAA s k _ (Just n) blockers prep = do
+    let q = clQueue s
+    waitCLAsyncs blockers
+    (exec, posts) <- nestM (clEnqueueNDRangeKernel q k n [] []) prep
+    let (o,cleanup) = partitionPost . catMaybes $ posts
+    when (not $ null o) 
+         (error "Automatic outputs not supported for async kernels!")
+    clWaitForEvents [exec]
     sequence_ cleanup
 
 -- Return an event the user can wait on for a kernel to finish.
@@ -307,6 +319,11 @@ instance (Storable a, KernelArgsAsync r) => KernelArgsAsync (a -> r) where
                      return Nothing
           in setArgAsync s k (arg+1) n blockers (load : prep)
 
+instance (Storable a, KAAsync r) => KAAsync (a -> r) where
+  setAA s k arg n blockers prep =
+    \a -> let load = clSetKernelArg k arg a >>
+                     return (Nothing, id)
+          in setAA s k (arg+1) n blockers (load : prep)
 
 -- Handle 'Vector' input arguments.
 instance (Storable a, KernelArgs r) => KernelArgs (Vector a -> r) where
@@ -325,6 +342,22 @@ instance (Storable a, KernelArgsAsync r) =>
                         return . Just . FreeInput $ 
                           void (clReleaseMemObject b)
           in setArgAsync s k (arg+1) n blockers (load : prep)
+
+instance (Storable a, KAAsync r) => KAAsync (Vector a -> r) where
+  setAA s k arg n blockers prep = 
+    \v -> let load = return (Just (FreeInput $ void (clReleaseMemObject b)),
+                             -- Problem: we need to refer to b in the
+                             -- cleanup action, but we don't get a b
+                             -- unless we give it a pointer to our
+                             -- data. This means the continuation has
+                             -- to produce the cleanup action.
+
+                     -- do b <- vectorToBuffer (clContext s) v
+                     --    clSetKernelArg k arg b
+                     --    return . Just . FreeInput $ 
+                     --      void (clReleaseMemObject b)
+          in setArgAsync s k (arg+1) n blockers (load : prep)
+
 
 -- Keep track of an argument that specifies the number of work items
 -- to execute.
