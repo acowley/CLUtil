@@ -1,4 +1,4 @@
-import System.GPU.CLUtil
+import Control.Parallel.CLUtil
 import qualified Data.Vector.Storable as V
 
 test1 = do s <- ezInit CL_DEVICE_TYPE_CPU
@@ -19,7 +19,7 @@ test2 = do s <- ezInit CL_DEVICE_TYPE_CPU
            print $ V.sum (v3::Vector Double)
            print $ V.sum (v4::Vector CInt)
 
-test3 = do s <- ezInit CL_DEVICE_TYPE_GPU
+test3 = do s <- ezInit CL_DEVICE_TYPE_ALL
            k <- kernelFromFile s "VecEZ2.cl" "floaty"
            let v1 = V.enumFromN  0 16 :: Vector Float
                v2 = V.enumFromN 16 16 :: Vector Float

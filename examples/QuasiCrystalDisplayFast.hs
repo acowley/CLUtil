@@ -5,7 +5,7 @@
 -- sines and cosines of the chosen angles, then assume that we are
 -- working with exactly 7 angles in the kernel code which then
 -- performs vectorized calculations.
-import System.GPU.CLUtil
+import Control.Parallel.CLUtil
 import qualified Data.Vector.Storable as V
 import Data.Word (Word8)
 import Graphics.Gloss hiding (Vector, scale)
@@ -36,11 +36,11 @@ main = do s <- ezInit CL_DEVICE_TYPE_ALL
               frame :: Float -> Picture
               frame phase = unsafePerformIO $
                             mkPicture `fmap`
-                            runKernel s k pixels' scale phase
+                            runKernelCPS s k pixels' scale phase
                                       sines cosines
                                       (Out (numPix*4)) (Work2D pixels pixels)
               {-# NOINLINE frame #-}
           -- gloss 1.6 API
-          -- animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
+          animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
           -- gloss 1.5 API
-          animateInWindow "Quasicrystal" (pixels,pixels) (0,0) black frame
+          -- animateInWindow "Quasicrystal" (pixels,pixels) (0,0) black frame
