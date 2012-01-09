@@ -17,7 +17,14 @@ Extra-Source-Files: examples/QuasiCrystalDisplay.hs,
                     examples/VecEZ2.cl
 
 Library
-  Exposed-modules:     System.GPU.CLUtil
+  Exposed-modules:     System.GPU.CLUtil,
+                       System.GPU.CLUtil.KernelArgs,
+                       System.GPU.CLUtil.KernelArgsCPS,
+                       System.GPU.CLUtil.KernelArgsAsync,
+                       System.GPU.CLUtil.KernelArgsCPSAsync,
+                       System.GPU.CLUtil.State,
+                       System.GPU.CLUtil.VectorBuffers
+  Other-modules:       System.GPU.CLUtil.KernelArgTypes
   HS-Source-Dirs:      src
   Build-depends:       base >= 4.2,
                        bytestring,
