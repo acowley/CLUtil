@@ -2,7 +2,8 @@
 -- library.
 module System.GPU.CLUtil (
   -- * Initialization and kernel compiliation
-  ezInit, ezRelease, loadProgram, kernelFromFile, OpenCLState(..),
+  ezInit, ezRelease, loadProgram, loadProgramFastMath, kernelFromFile, 
+  OpenCLState(..),
   -- * Variable arity kernel execution 
   -- |Similar in spirit to "Text.Printf"
   OutputSize(..), NumWorkItems(..), 
@@ -54,12 +55,19 @@ loadProgram state src = do p <- clCreateProgramWithSource (clContext state) src
                            return $ clCreateKernel p
 -- Another option for the clBuildProgram call is "-cl-fast-relaxed-math"
 
+-- |Load program source using a previously-initialized
+-- 'OpenCLState'. The returned function may be used to create
+-- executable kernels with the @-cl-fast-relaxed-math@ option from
+-- supplied program source.
+loadProgramFastMath :: OpenCLState -> String -> IO (String -> IO CLKernel)
+loadProgramFastMath state src = 
+  do p <- clCreateProgramWithSource (clContext state) src
+     clBuildProgram p [clDevice state] 
+                    "-cl-strict-aliasing -cl-fast-relaxed-math"
+     return $ clCreateKernel p
+
 -- |Load program source from the given file and build the named
 -- kernel.
 kernelFromFile :: OpenCLState -> FilePath -> String -> IO CLKernel
 kernelFromFile state file kname = 
   readFile file >>= loadProgram state >>= ($ kname)
-
-
-
-
