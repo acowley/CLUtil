@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, FlexibleInstances #-}
+{-# LANGUAGE RankNTypes, FlexibleInstances, OverlappingInstances #-}
 -- |Asynchronous kernel execution /without copying input
 -- vectors/. Avoiding the input copies improves performance, but is
 -- unsafe as it means the OpenCL driver has a pointer to 'Vector'

@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances #-}
 -- |Synchronous OpenCL kernel execution with easy support for 'Vector'
 -- inputs and outputs.
 module System.GPU.CLUtil.KernelArgs (KernelArgs, runKernel) where
@@ -43,7 +43,7 @@ class KernelArgs a where
             [IO (Maybe PostExec)] -> a
 
 runPrep :: [IO (Maybe PostExec)] -> IO ([Int -> IO (CLMem, Int)], [IO ()])
-runPrep = fmap (partitionPost . catMaybes) . sequence
+runPrep = fmap (partitionPost . catMaybes) . sequence . reverse
 
 enqKernelAndWait :: CLCommandQueue -> CLKernel -> NumWorkItems -> IO ()
 enqKernelAndWait q k n = 

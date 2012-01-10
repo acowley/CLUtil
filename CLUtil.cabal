@@ -1,5 +1,5 @@
 Name:                CLUtil
-Version:             0.1
+Version:             0.2
 Synopsis:            A thin abstraction layer over the OpenCL library.
 Homepage:            http://github.com/acowley/CLUtil
 License:             BSD3

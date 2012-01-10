@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, OverlappingInstances #-}
 -- |Asynchronous kernel execution. Note that performance when running
 -- on the CPU can take a hit here due to the need to make copies of
 -- input vectors when kicking off kernel execution.
@@ -13,15 +13,8 @@ import System.GPU.CLUtil.State
 import System.GPU.CLUtil.VectorBuffers
 import System.GPU.OpenCL
 
-data PostExec = ReadOutput (Int -> IO (CLMem,Int))
-              | FreeInput (IO ())
-
-postToEither :: PostExec -> Either (Int -> IO (CLMem,Int)) (IO ())
-postToEither (ReadOutput r) = Left r
-postToEither (FreeInput m) = Right m
-
-partitionPost :: [PostExec] -> ([Int -> IO (CLMem, Int)], [IO ()])
-partitionPost = partitionEithers . map postToEither
+-- Free an input buffer
+type PostExec = IO ()
 
 -- A class for running kernels asynchronously. This class does not
 -- have instances for returning 'Vector' values. The only possibile
@@ -34,15 +27,13 @@ class KernelArgsAsync a where
   setArg :: OpenCLState -> CLKernel -> CLuint -> Maybe NumWorkItems ->
             [CLAsync] -> [IO (Maybe PostExec)] -> a
 
-runPrep :: [IO (Maybe PostExec)] -> IO ([Int -> IO (CLMem, Int)], [IO ()])
-runPrep = fmap (partitionPost . catMaybes) . sequence
+runPrep :: [IO (Maybe PostExec)] -> IO [IO ()]
+runPrep = fmap catMaybes . sequence
 
 -- Return an event the user can wait on for a kernel to finish.
 instance KernelArgsAsync (IO CLAsync) where
   setArg s k _ (Just n) blockers prep = do
-    (o, cleanup) <- runPrep prep
-    when (not $ null o) 
-         (error "Automatic outputs not supported for async kernels!")
+    cleanup <- runPrep prep
     waitCLAsyncs blockers
     exec <- clEnqueueNDRangeKernel (clQueue s) k (workItemsList n) [] []
     return $ CLAsync exec cleanup
@@ -60,8 +51,7 @@ instance (Storable a, KernelArgsAsync r) =>
   setArg s k arg n blockers prep = 
     \v -> let load = do b <- vectorToBuffer (clContext s) v
                         clSetKernelArg k arg b
-                        return . Just . FreeInput $ 
-                          void (clReleaseMemObject b)
+                        return . Just $ void (clReleaseMemObject b)
           in setArg s k (arg+1) n blockers (load : prep)
 
 -- Keep track of an argument that specifies the number of work items

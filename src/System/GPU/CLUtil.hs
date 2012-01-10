@@ -1,5 +1,3 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances, 
-             RankNTypes #-}
 -- |High-level interfaces for working with 'Vector's and the OpenCL
 -- library.
 module System.GPU.CLUtil (
