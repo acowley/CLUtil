@@ -59,6 +59,9 @@ type PrepExec = PrepCont -> IO [PostExec]
 mkRead :: Storable a => (ForeignPtr (), Int) -> IO (Vector a)
 mkRead (ptr,num) = V.unsafeFreeze $
                    VM.unsafeFromForeignPtr (castForeignPtr ptr) 0 num
+-- mkRead :: Storable a => (CLMem, Int) -> IO (Vector a)
+-- mkRead (getPtr,num) = do fp <- castForeignPtr <$> getPtr >>= newForeignPtr
+--                          V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 num
 
 class KernelArgsCPS a where
   -- Setting an argument requires a state, a kernel, the position of
@@ -176,7 +179,7 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
                b <- withForeignPtr ptr $ \p ->
                     clCreateBuffer (clContext s)
                                    [ CL_MEM_WRITE_ONLY
-                                   , CL_MEM_USE_HOST_PTR ]
+                                   , CL_MEM_ALLOC_HOST_PTR ]
                                    (m*sz, castPtr p)
                clSetKernelArg k arg b
                let finishOutput = clReleaseMemObject b >> return (ptr,m)
@@ -186,7 +189,8 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
 -- |Simple interface for calling an OpenCL kernel. Supports input
 -- 'Vector' and 'Storable' arguments, and produces 'Vector'
 -- outputs. Uses the actual pointers underlying any vector arguments,
--- improving performance of kernels run on the CPU.
+-- improving performance of kernels run on the CPU. NOTE: some GPU
+-- OpenCL drivers do not support this usage.
 -- 
 -- > (v1,v2) <- runKernelCPS cluState kernel vIn (Work1D 4) (Out 4) (Out 4)
 runKernelCPS :: KernelArgsCPS a => OpenCLState -> CLKernel -> a

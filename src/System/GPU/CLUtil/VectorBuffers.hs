@@ -20,13 +20,13 @@ vectorToBuffer context v =
     -- much faster. But if the GC moves things around, the world will
     -- end.
     clCreateBuffer context 
-                   --[CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR]
                    [CL_MEM_READ_ONLY, CL_MEM_COPY_HOST_PTR] 
                    (sz, castPtr ptr)
   where sz = V.length v * sizeOf (undefined::a)
 
 -- |Pass a function a buffer whose contents are the data underlying a
--- 'Vector'.
+-- 'Vector'. In OpenCL parlance, this creates an OpenCL buffer with
+-- the @CL_MEM_USE_HOST_PTR@ flag.
 withVectorBuffer :: forall a b. Storable a => 
                     CLContext -> Vector a -> (CLMem -> IO b) -> IO b
 withVectorBuffer context v k = 

@@ -2,7 +2,8 @@
 -- library.
 module System.GPU.CLUtil (
   -- * Initialization and kernel compiliation
-  ezInit, ezRelease, loadProgram, loadProgramFastMath, kernelFromFile, 
+  ezInit, ezRelease, loadProgram, loadProgramFastMath, 
+  loadProgramFile, loadProgramFileFastMath, kernelFromFile, 
   OpenCLState(..),
   -- * Variable arity kernel execution 
   -- |Similar in spirit to "Text.Printf"
@@ -18,7 +19,7 @@ module System.GPU.CLUtil (
   module System.GPU.OpenCL, Vector, CInt
   ) where
 import System.GPU.OpenCL
-import Control.Monad (void)
+import Control.Monad (void, (>=>))
 import Data.Vector.Storable (Vector)
 import Foreign.C.Types (CInt)
 import Foreign.Ptr (nullPtr)
@@ -45,17 +46,22 @@ ezRelease :: OpenCLState -> IO ()
 ezRelease (OpenCLState _ c q) = 
   void $ clReleaseContext c >> clReleaseCommandQueue q
 
--- |Load program source using a previously-initialized 'OpenCLState'
--- record. The returned function may be used to create executable
--- kernels defined in the supplied program source.
+-- |Load program source using a previously initialized
+-- 'OpenCLState'. The returned function may be used to create
+-- executable kernels defined in the supplied program source.
 loadProgram :: OpenCLState -> String -> IO (String -> IO CLKernel)
 loadProgram state src = do p <- clCreateProgramWithSource (clContext state) src
                            clBuildProgram p [clDevice state] 
                                           "-cl-strict-aliasing"
                            return $ clCreateKernel p
--- Another option for the clBuildProgram call is "-cl-fast-relaxed-math"
 
--- |Load program source using a previously-initialized
+-- |Load a program from a file using a previously initialized
+-- 'OpenCLState'. The returned function may be used to create
+-- executable kernels defined in the program file.
+loadProgramFile :: OpenCLState -> FilePath -> IO (String -> IO CLKernel)
+loadProgramFile s = readFile >=> loadProgram s
+
+-- |Load program source using a previously initialized
 -- 'OpenCLState'. The returned function may be used to create
 -- executable kernels with the @-cl-fast-relaxed-math@ option from
 -- supplied program source.
@@ -65,6 +71,13 @@ loadProgramFastMath state src =
      clBuildProgram p [clDevice state] 
                     "-cl-strict-aliasing -cl-fast-relaxed-math"
      return $ clCreateKernel p
+
+-- |Load a program from a file using a previously initialized
+-- 'OpenCLState'. The returned function may be used to create
+-- executable kernels with the @-cl-fast-relaxed-math@ option from the
+-- loaded program.
+loadProgramFileFastMath :: OpenCLState -> FilePath -> IO (String -> IO CLKernel)
+loadProgramFileFastMath s = readFile >=> loadProgramFastMath s
 
 -- |Load program source from the given file and build the named
 -- kernel.

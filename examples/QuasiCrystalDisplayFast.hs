@@ -36,11 +36,11 @@ main = do s <- ezInit CL_DEVICE_TYPE_ALL
               frame :: Float -> Picture
               frame phase = unsafePerformIO $
                             mkPicture `fmap`
-                            runKernelCPS s k pixels' scale phase
-                                         sines cosines
-                                         (Out (numPix*4)) (Work2D pixels pixels)
+                            runKernel s k pixels' scale phase
+                                      sines cosines
+                                      (Out (numPix*4)) (Work2D pixels pixels)
               {-# NOINLINE frame #-}
           -- gloss 1.6 API
-          -- animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
+          animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
           -- gloss 1.5 API
-          animateInWindow "Quasicrystal" (pixels,pixels) (0,0) black frame
+          -- animateInWindow "Quasicrystal" (pixels,pixels) (0,0) black frame
