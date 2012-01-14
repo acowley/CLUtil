@@ -1,4 +1,5 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances #-}
+{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances,
+             ForeignFunctionInterface #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module System.GPU.CLUtil.KernelArgsCPS (KernelArgsCPS, runKernelCPS) where
@@ -10,25 +11,27 @@ import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Foreign.ForeignPtr (ForeignPtr, castForeignPtr, withForeignPtr, 
-                           mallocForeignPtrBytes)
-import Foreign.Ptr (castPtr, nullPtr)
-import Foreign.Storable (Storable, sizeOf)
+                           mallocForeignPtrBytes, newForeignPtrEnv)
+import Foreign.Marshal.Alloc (malloc, free)
+import Foreign.Ptr (castPtr, nullPtr, plusPtr, FunPtr, Ptr)
+import Foreign.Storable (Storable(..))
 import System.GPU.CLUtil.KernelArgTypes 
 import System.GPU.CLUtil.State
 import System.GPU.CLUtil.VectorBuffers
 import System.GPU.OpenCL
+import System.IO.Unsafe (unsafePerformIO)
 
 -- In this variation, reading an output is an action that frees the
 -- OpenCL buffer and provides an allocated ForeignPtr and the number
 -- of elements in the output vector.
-data PostExec = ReadOutput (IO (ForeignPtr (), Int))
+data PostExec = ReadOutput (IO (IO (ForeignPtr ()), Int))
               | FreeInput (IO ())
 
-postToEither :: PostExec -> Either (IO (ForeignPtr (), Int)) (IO ())
+postToEither :: PostExec -> Either (IO (IO (ForeignPtr ()), Int)) (IO ())
 postToEither (ReadOutput r) = Left r
 postToEither (FreeInput m) = Right m
 
-partitionPost :: [PostExec] -> ([IO (ForeignPtr (), Int)], [IO ()])
+partitionPost :: [PostExec] -> ([IO (IO (ForeignPtr ()), Int)], [IO ()])
 partitionPost = partitionEithers . map postToEither
 
 -- We want to write something like this when dealing with a Vector
@@ -56,12 +59,12 @@ type PrepCont = ([Int] -> IO (Maybe PostExec, [Int])) -> IO [PostExec]
 type PrepExec = PrepCont -> IO [PostExec]
 
 -- Wrap an output buffer in a 'Vector'.
-mkRead :: Storable a => (ForeignPtr (), Int) -> IO (Vector a)
-mkRead (ptr,num) = V.unsafeFreeze $
-                   VM.unsafeFromForeignPtr (castForeignPtr ptr) 0 num
--- mkRead :: Storable a => (CLMem, Int) -> IO (Vector a)
--- mkRead (getPtr,num) = do fp <- castForeignPtr <$> getPtr >>= newForeignPtr
---                          V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 num
+-- mkRead :: Storable a => (ForeignPtr (), Int) -> IO (Vector a)
+-- mkRead (ptr,num) = V.unsafeFreeze $
+--                    VM.unsafeFromForeignPtr (castForeignPtr ptr) 0 num
+mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
+mkRead (getPtr,num) = do fp <- castForeignPtr <$> getPtr
+                         V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 num
 
 class KernelArgsCPS a where
   -- Setting an argument requires a state, a kernel, the position of
@@ -83,7 +86,7 @@ nestM outputSizes finish = go [] outputSizes
 
 runCPS :: [Int] -> OpenCLState -> CLKernel -> NumWorkItems -> 
           [PrepExec] -> 
-          IO ([IO (ForeignPtr (), Int)], [IO ()])
+          IO ([IO (IO (ForeignPtr ()), Int)], [IO ()])
 runCPS outputSizes s k n prep =
   partitionPost <$> nestM outputSizes runK prep
   where runK = do ev <- clEnqueueNDRangeKernel (clQueue s) 
@@ -167,6 +170,45 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
 instance KernelArgsCPS r => KernelArgsCPS (NumWorkItems -> r) where
   setArgCPS s k arg _ prep = \n -> setArgCPS s k arg (Just n) prep
 
+newtype BufferFinalizerEnv = BFE (CLCommandQueue, CLMem, Ptr ())
+
+szQueue, szMem :: Int
+szQueue = sizeOf (undefined::CLCommandQueue)
+szMem = sizeOf (undefined::CLMem)
+
+instance Storable BufferFinalizerEnv where
+  sizeOf _ = szQueue + szMem + sizeOf (undefined::Ptr ())
+  alignment _ = alignment (undefined::Ptr ())
+  peek ptr = do q <- peek $ castPtr ptr
+                let ptr' = plusPtr ptr szQueue
+                m <- peek $ castPtr ptr'
+                let ptr'' = plusPtr ptr' szMem
+                p <- peek $ castPtr ptr''
+                return $ BFE (q,m,p)
+  poke ptr (BFE (q,m,p)) = do poke (castPtr ptr) q
+                              let ptr' = plusPtr ptr szQueue
+                              poke (castPtr ptr') m
+                              let ptr'' = plusPtr ptr' szMem
+                              poke (castPtr ptr'') p
+
+type BufferFinalizer = Ptr BufferFinalizerEnv -> Ptr () -> IO ()
+foreign import ccall "wrapper"
+  mkBufferFinalizer :: BufferFinalizer -> IO (FunPtr BufferFinalizer)
+
+bufferFinalizer :: FunPtr BufferFinalizer
+bufferFinalizer = unsafePerformIO (mkBufferFinalizer go)
+  where go :: BufferFinalizer
+        go env _ = do BFE (q,b,p) <- peek env
+                      clEnqueueUnmapMemObject q b p [] >>=
+                        clReleaseEvent
+                      clReleaseMemObject b
+                      free env
+
+-- DEBUG: Until these are merged in!
+data BOGUS_FLAG = CL_MAP_READ
+clEnqueueMapBuffer = undefined
+clEnqueueUnmapMemObject = undefined
+
 -- Handle 'Vector' outputs by automatically managing the underlying
 -- OpenCL buffers.
 instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
@@ -175,14 +217,22 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
       let load cont = cont allocateOutput
           allocateOutput [] = error "Couldn't determine output element size"
           allocateOutput (sz:szs) = 
-            do ptr <- mallocForeignPtrBytes (m*sz)
-               b <- withForeignPtr ptr $ \p ->
-                    clCreateBuffer (clContext s)
+            do b <- clCreateBuffer (clContext s)
                                    [ CL_MEM_WRITE_ONLY
                                    , CL_MEM_ALLOC_HOST_PTR ]
-                                   (m*sz, castPtr p)
+                                   (m*sz, nullPtr)
                clSetKernelArg k arg b
-               let finishOutput = clReleaseMemObject b >> return (ptr,m)
+               -- The goal is to map the output buffer, and wrap that
+               -- pointer in a Vector. This would mean that the Vector
+               -- is wrapping memory allocated by OpenCL.
+               let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
+                                                            True [CL_MAP_READ]
+                                                            0 (m*sz) [] 
+                               clReleaseEvent ev
+                               env <- malloc :: IO (Ptr BufferFinalizerEnv)
+                               poke env $ BFE (clQueue s, b, p)
+                               newForeignPtrEnv bufferFinalizer env p
+                   finishOutput = clReleaseMemObject b >> return (getPtr,m)
                return (Just $ ReadOutput finishOutput, szs) 
       in setArgCPS s k (arg+1) n (load:prep)
 
