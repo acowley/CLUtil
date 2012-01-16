@@ -10,8 +10,9 @@ import Data.Maybe (catMaybes)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
+import Foreign.Concurrent (newForeignPtr)
 import Foreign.ForeignPtr (ForeignPtr, castForeignPtr, withForeignPtr, 
-                           mallocForeignPtrBytes, newForeignPtrEnv)
+                           mallocForeignPtrBytes)
 import Foreign.Marshal.Alloc (malloc, free)
 import Foreign.Ptr (castPtr, nullPtr, plusPtr, FunPtr, Ptr)
 import Foreign.Storable (Storable(..))
@@ -21,9 +22,9 @@ import Control.Parallel.CLUtil.VectorBuffers
 import Control.Parallel.OpenCL
 import System.IO.Unsafe (unsafePerformIO)
 
--- In this variation, reading an output is an action that frees the
--- OpenCL buffer and provides an allocated ForeignPtr and the number
--- of elements in the output vector.
+-- In this variation, reading an output is an action that maps the
+-- OpenCL buffer, and provides a ForeignPtr and the number of elements
+-- in the output vector.
 data PostExec = ReadOutput (IO (IO (ForeignPtr ()), Int))
               | FreeInput (IO ())
 
@@ -59,9 +60,6 @@ type PrepCont = ([Int] -> IO (Maybe PostExec, [Int])) -> IO [PostExec]
 type PrepExec = PrepCont -> IO [PostExec]
 
 -- Wrap an output buffer in a 'Vector'.
--- mkRead :: Storable a => (ForeignPtr (), Int) -> IO (Vector a)
--- mkRead (ptr,num) = V.unsafeFreeze $
---                    VM.unsafeFromForeignPtr (castForeignPtr ptr) 0 num
 mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
 mkRead (getPtr,num) = do fp <- castForeignPtr <$> getPtr
                          V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 num
@@ -191,18 +189,14 @@ instance Storable BufferFinalizerEnv where
                               let ptr'' = plusPtr ptr' szMem
                               poke (castPtr ptr'') p
 
-type BufferFinalizer = Ptr BufferFinalizerEnv -> Ptr () -> IO ()
-foreign import ccall "wrapper"
-  mkBufferFinalizer :: BufferFinalizer -> IO (FunPtr BufferFinalizer)
-
-bufferFinalizer :: FunPtr BufferFinalizer
-bufferFinalizer = unsafePerformIO (mkBufferFinalizer go)
-  where go :: BufferFinalizer
-        go env _ = do BFE (q,b,p) <- peek env
-                      clEnqueueUnmapMemObject q b p [] >>=
-                        clReleaseEvent
-                      clReleaseMemObject b
-                      free env
+-- A finalizer we attach to the 'ForeignPtr' wrapping a mapped OpenCL
+-- memory buffer. This lets us wrap the mapped buffer in a 'Vector',
+-- then release it when the 'Vector' is GC'ed.
+bufferFinalizer :: CLCommandQueue -> CLMem -> Ptr () -> IO ()
+bufferFinalizer q b p = do clEnqueueUnmapMemObject q b p [] >>=
+                             -- clWaitForEvents . (:[])
+                             clReleaseEvent
+                           void $ clReleaseMemObject b
 
 -- Handle 'Vector' outputs by automatically managing the underlying
 -- OpenCL buffers.
@@ -223,11 +217,9 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
                let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
                                                             True [CL_MAP_READ]
                                                             0 (m*sz) [] 
-                               --clReleaseEvent ev
-                               clWaitForEvents [ev]
-                               env <- malloc :: IO (Ptr BufferFinalizerEnv)
-                               poke env $ BFE (clQueue s, b, p)
-                               newForeignPtrEnv bufferFinalizer env p
+                               clReleaseEvent ev
+                               -- clWaitForEvents [ev]
+                               newForeignPtr p $ bufferFinalizer (clQueue s) b p 
                    finishOutput = return (getPtr,m)
                return (Just $ ReadOutput finishOutput, szs) 
       in setArgCPS s k (arg+1) n (load:prep)
