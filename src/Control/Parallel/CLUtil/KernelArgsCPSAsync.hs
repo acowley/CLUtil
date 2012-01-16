@@ -3,8 +3,8 @@
 -- vectors/. Avoiding the input copies improves performance, but is
 -- unsafe as it means the OpenCL driver has a pointer to 'Vector'
 -- data.
-module System.GPU.CLUtil.KernelArgsCPSAsync (KernelArgsCPSAsync, 
-                                             unsafeRunKernelCPSAsync) where
+module Control.Parallel.CLUtil.KernelArgsCPSAsync 
+  (KernelArgsCPSAsync, unsafeRunKernelCPSAsync) where
 import Control.Applicative ((<$>), (<*>), pure)
 import Control.Arrow (second)
 import Control.Monad (void, when)
@@ -12,10 +12,10 @@ import Data.Either (partitionEithers)
 import Data.Vector.Storable (Vector)
 import Foreign.ForeignPtr (ForeignPtr)
 import Foreign.Storable (Storable)
-import System.GPU.CLUtil.KernelArgTypes
-import System.GPU.CLUtil.State
-import System.GPU.CLUtil.VectorBuffers
-import System.GPU.OpenCL
+import Control.Parallel.CLUtil.KernelArgTypes
+import Control.Parallel.CLUtil.State
+import Control.Parallel.CLUtil.VectorBuffers
+import Control.Parallel.OpenCL
 
 data PostExec = ReadOutput (Int -> IO (CLMem,Int))
               | FreeInput (IO ())
@@ -86,7 +86,7 @@ instance KernelArgsCPSAsync (IO CLAsync) where
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsCPSAsync r) => KernelArgsCPSAsync (a -> r) where
   setArg s k arg n blockers prep =
-    \a -> let load = \cont -> clSetKernelArg k arg a >>
+    \a -> let load = \cont -> clSetKernelArgSto k arg a >>
                               cont id
           in setArg s k (arg+1) n blockers (load : prep)
 
@@ -97,7 +97,7 @@ instance (Storable a, KernelArgsCPSAsync r) =>
     \v -> let load cont = withVectorBuffer (clContext s) v $
                           \b -> let clean = FreeInput . void $
                                             clReleaseMemObject b
-                                in do clSetKernelArg k arg b
+                                in do clSetKernelArgSto k arg b
                                       cont (clean:)
           in setArg s k (arg+1) n blockers (load : prep)
 

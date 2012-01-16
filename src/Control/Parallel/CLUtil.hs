@@ -1,6 +1,6 @@
 -- |High-level interfaces for working with 'Vector's and the OpenCL
 -- library.
-module System.GPU.CLUtil (
+module Control.Parallel.CLUtil (
   -- * Initialization and kernel compiliation
   ezInit, ezRelease, loadProgram, loadProgramFastMath, 
   loadProgramFile, loadProgramFileFastMath, kernelFromFile, 
@@ -11,24 +11,24 @@ module System.GPU.CLUtil (
   runKernel, KernelArgs,
   runKernelCPS, KernelArgsCPS,
   runKernelAsync, KernelArgsAsync,
-  module System.GPU.CLUtil.VectorBuffers,
+  module Control.Parallel.CLUtil.VectorBuffers,
   -- * Working with asynchronous kernels
   initOutputBuffer,
   CLAsync(..), waitCLAsync, waitCLAsyncs,
   -- * Re-exports for convenience
-  module System.GPU.OpenCL, Vector, CInt
+  module Control.Parallel.OpenCL, Vector, CInt
   ) where
-import System.GPU.OpenCL
+import Control.Parallel.OpenCL
 import Control.Monad (void, (>=>))
 import Data.Vector.Storable (Vector)
 import Foreign.C.Types (CInt)
 import Foreign.Ptr (nullPtr)
-import System.GPU.CLUtil.State
-import System.GPU.CLUtil.VectorBuffers
-import System.GPU.CLUtil.KernelArgs
-import System.GPU.CLUtil.KernelArgsCPS
-import System.GPU.CLUtil.KernelArgsAsync
-import System.GPU.CLUtil.KernelArgTypes
+import Control.Parallel.CLUtil.State
+import Control.Parallel.CLUtil.VectorBuffers
+import Control.Parallel.CLUtil.KernelArgs
+import Control.Parallel.CLUtil.KernelArgsCPS
+import Control.Parallel.CLUtil.KernelArgsAsync
+import Control.Parallel.CLUtil.KernelArgTypes
 
 -- |Allocate a buffer whose contents are undefined.
 initOutputBuffer :: Integral a => OpenCLState -> [CLMemFlag] -> a -> IO CLMem

@@ -2,16 +2,17 @@
 -- |Asynchronous kernel execution. Note that performance when running
 -- on the CPU can take a hit here due to the need to make copies of
 -- input vectors when kicking off kernel execution.
-module System.GPU.CLUtil.KernelArgsAsync (KernelArgsAsync, runKernelAsync) where
+module Control.Parallel.CLUtil.KernelArgsAsync 
+  (KernelArgsAsync, runKernelAsync) where
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
 import Data.Maybe (catMaybes)
 import Data.Vector.Storable (Vector)
 import Foreign (Storable)
-import System.GPU.CLUtil.KernelArgTypes
-import System.GPU.CLUtil.State
-import System.GPU.CLUtil.VectorBuffers
-import System.GPU.OpenCL
+import Control.Parallel.CLUtil.KernelArgTypes
+import Control.Parallel.CLUtil.State
+import Control.Parallel.CLUtil.VectorBuffers
+import Control.Parallel.OpenCL
 
 -- Free an input buffer
 type PostExec = IO ()
@@ -41,7 +42,7 @@ instance KernelArgsAsync (IO CLAsync) where
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsAsync r) => KernelArgsAsync (a -> r) where
   setArg s k arg n blockers prep = 
-    \a -> let load = clSetKernelArg k arg a >> 
+    \a -> let load = clSetKernelArgSto k arg a >> 
                      return Nothing
           in setArg s k (arg+1) n blockers (load : prep)
 
@@ -50,7 +51,7 @@ instance (Storable a, KernelArgsAsync r) =>
   KernelArgsAsync (Vector a -> r) where
   setArg s k arg n blockers prep = 
     \v -> let load = do b <- vectorToBuffer (clContext s) v
-                        clSetKernelArg k arg b
+                        clSetKernelArgSto k arg b
                         return . Just $ void (clReleaseMemObject b)
           in setArg s k (arg+1) n blockers (load : prep)
 

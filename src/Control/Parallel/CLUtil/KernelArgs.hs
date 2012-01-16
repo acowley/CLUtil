@@ -1,7 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances #-}
 -- |Synchronous OpenCL kernel execution with easy support for 'Vector'
 -- inputs and outputs.
-module System.GPU.CLUtil.KernelArgs (KernelArgs, runKernel) where
+module Control.Parallel.CLUtil.KernelArgs (KernelArgs, runKernel) where
 import Control.Applicative
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
@@ -9,10 +9,10 @@ import Data.Maybe (catMaybes)
 import Data.Vector.Storable (Vector)
 import Foreign.Ptr (nullPtr)
 import Foreign.Storable (Storable, sizeOf)
-import System.GPU.CLUtil.KernelArgTypes
-import System.GPU.CLUtil.State
-import System.GPU.CLUtil.VectorBuffers
-import System.GPU.OpenCL
+import Control.Parallel.CLUtil.KernelArgTypes
+import Control.Parallel.CLUtil.State
+import Control.Parallel.CLUtil.VectorBuffers
+import Control.Parallel.OpenCL
 
 data PostExec = ReadOutput (Int -> IO (CLMem,Int))
               | FreeInput (IO ())
@@ -112,7 +112,7 @@ instance forall a b c. (Storable a, Storable b, Storable c) =>
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgs r) => KernelArgs (a -> r) where
-  setArg s k arg n prep = \a -> let load = clSetKernelArg k arg a >> 
+  setArg s k arg n prep = \a -> let load = clSetKernelArgSto k arg a >> 
                                            return Nothing
                                 in setArg s k (arg+1) n (load : prep)
 
@@ -120,7 +120,7 @@ instance (Storable a, KernelArgs r) => KernelArgs (a -> r) where
 instance (Storable a, KernelArgs r) => KernelArgs (Vector a -> r) where
   setArg s k arg n prep = \v -> 
                           let load = do b <- vectorToBuffer (clContext s) v
-                                        clSetKernelArg k arg b
+                                        clSetKernelArgSto k arg b
                                         return . Just . FreeInput $ 
                                            void (clReleaseMemObject b)
                           in setArg s k (arg+1) n (load : prep)
@@ -138,7 +138,7 @@ instance KernelArgs r => KernelArgs (OutputSize -> r) where
       let alloc sz = do b <- clCreateBuffer (clContext s) 
                                             [CL_MEM_WRITE_ONLY]
                                             (m*sz, nullPtr)
-                        clSetKernelArg k arg b
+                        clSetKernelArgSto k arg b
                         return (b,m)
       in setArg s k (arg+1) n (return (Just $ ReadOutput alloc) : prep)
 

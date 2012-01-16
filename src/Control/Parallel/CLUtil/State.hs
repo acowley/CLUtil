@@ -1,7 +1,7 @@
 -- |A simple record that packages up commonly used references to bits
 -- of the OpenCL interface.
-module System.GPU.CLUtil.State where
-import System.GPU.OpenCL
+module Control.Parallel.CLUtil.State where
+import Control.Parallel.OpenCL
 
 -- |A record capturing the core pieces of state needed to evaluate
 -- OpenCL kernels.

@@ -1,7 +1,7 @@
 -- |Types used for passing arguments to OpenCL kernels, and dealing
 -- with asynchronous execution.
-module System.GPU.CLUtil.KernelArgTypes where
-import System.GPU.OpenCL
+module Control.Parallel.CLUtil.KernelArgTypes where
+import Control.Parallel.OpenCL
 
 -- |A vector that will be written to. The parameter is the number of
 -- elements in the vector.
@@ -11,7 +11,7 @@ newtype OutputSize = Out Int
 data NumWorkItems = Work1D Int | Work2D Int Int | Work3D Int Int Int
 
 -- |Convert a 'NumWorkItems' into the format expected by
--- "System.GPU.OpenCL".
+-- "Control.Parallel.OpenCL".
 workItemsList :: NumWorkItems -> [Int]
 workItemsList (Work1D n) = [n]
 workItemsList (Work2D n m) = [n,m]

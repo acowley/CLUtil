@@ -2,7 +2,7 @@
              ForeignFunctionInterface #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
-module System.GPU.CLUtil.KernelArgsCPS (KernelArgsCPS, runKernelCPS) where
+module Control.Parallel.CLUtil.KernelArgsCPS (KernelArgsCPS, runKernelCPS) where
 import Control.Applicative
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
@@ -15,10 +15,10 @@ import Foreign.ForeignPtr (ForeignPtr, castForeignPtr, withForeignPtr,
 import Foreign.Marshal.Alloc (malloc, free)
 import Foreign.Ptr (castPtr, nullPtr, plusPtr, FunPtr, Ptr)
 import Foreign.Storable (Storable(..))
-import System.GPU.CLUtil.KernelArgTypes 
-import System.GPU.CLUtil.State
-import System.GPU.CLUtil.VectorBuffers
-import System.GPU.OpenCL
+import Control.Parallel.CLUtil.KernelArgTypes 
+import Control.Parallel.CLUtil.State
+import Control.Parallel.CLUtil.VectorBuffers
+import Control.Parallel.OpenCL
 import System.IO.Unsafe (unsafePerformIO)
 
 -- In this variation, reading an output is an action that frees the
@@ -151,7 +151,7 @@ instance forall a b c. (Storable a, Storable b, Storable c) =>
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (a -> r) where
   setArgCPS s k arg n prep = \a -> 
-                             let load cont = clSetKernelArg k arg a >>
+                             let load cont = clSetKernelArgSto k arg a >>
                                              cont (\sz -> return (Nothing,sz))
                              in setArgCPS s k (arg+1) n (load : prep)
 
@@ -161,7 +161,7 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
     \v -> let load cont = withVectorBuffer (clContext s) v $
                           \b -> let clean = FreeInput . void $
                                             clReleaseMemObject b
-                                in do clSetKernelArg k arg b
+                                in do clSetKernelArgSto k arg b
                                       cont (\sz -> return (Just clean, sz))
           in setArgCPS s k (arg+1) n (load:prep)
 
@@ -204,11 +204,6 @@ bufferFinalizer = unsafePerformIO (mkBufferFinalizer go)
                       clReleaseMemObject b
                       free env
 
--- DEBUG: Until these are merged in!
-data BOGUS_FLAG = CL_MAP_READ
-clEnqueueMapBuffer = undefined
-clEnqueueUnmapMemObject = undefined
-
 -- Handle 'Vector' outputs by automatically managing the underlying
 -- OpenCL buffers.
 instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
@@ -221,18 +216,19 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
                                    [ CL_MEM_WRITE_ONLY
                                    , CL_MEM_ALLOC_HOST_PTR ]
                                    (m*sz, nullPtr)
-               clSetKernelArg k arg b
+               clSetKernelArgSto k arg b
                -- The goal is to map the output buffer, and wrap that
                -- pointer in a Vector. This would mean that the Vector
                -- is wrapping memory allocated by OpenCL.
                let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
                                                             True [CL_MAP_READ]
                                                             0 (m*sz) [] 
-                               clReleaseEvent ev
+                               --clReleaseEvent ev
+                               clWaitForEvents [ev]
                                env <- malloc :: IO (Ptr BufferFinalizerEnv)
                                poke env $ BFE (clQueue s, b, p)
                                newForeignPtrEnv bufferFinalizer env p
-                   finishOutput = clReleaseMemObject b >> return (getPtr,m)
+                   finishOutput = return (getPtr,m)
                return (Just $ ReadOutput finishOutput, szs) 
       in setArgCPS s k (arg+1) n (load:prep)
 
