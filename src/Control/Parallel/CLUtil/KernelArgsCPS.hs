@@ -156,7 +156,7 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (a -> r) where
 -- Handle 'Vector' input arguments.
 instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
   setArgCPS s k arg n prep = 
-    \v -> let load cont = withVectorBuffer (clContext s) v $
+    \v -> let load cont = withVectorBuffer s v $
                           \b -> let clean = FreeInput . void $
                                             clReleaseMemObject b
                                 in do clSetKernelArgSto k arg b
