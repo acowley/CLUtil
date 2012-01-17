@@ -168,27 +168,6 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
 instance KernelArgsCPS r => KernelArgsCPS (NumWorkItems -> r) where
   setArgCPS s k arg _ prep = \n -> setArgCPS s k arg (Just n) prep
 
-newtype BufferFinalizerEnv = BFE (CLCommandQueue, CLMem, Ptr ())
-
-szQueue, szMem :: Int
-szQueue = sizeOf (undefined::CLCommandQueue)
-szMem = sizeOf (undefined::CLMem)
-
-instance Storable BufferFinalizerEnv where
-  sizeOf _ = szQueue + szMem + sizeOf (undefined::Ptr ())
-  alignment _ = alignment (undefined::Ptr ())
-  peek ptr = do q <- peek $ castPtr ptr
-                let ptr' = plusPtr ptr szQueue
-                m <- peek $ castPtr ptr'
-                let ptr'' = plusPtr ptr' szMem
-                p <- peek $ castPtr ptr''
-                return $ BFE (q,m,p)
-  poke ptr (BFE (q,m,p)) = do poke (castPtr ptr) q
-                              let ptr' = plusPtr ptr szQueue
-                              poke (castPtr ptr') m
-                              let ptr'' = plusPtr ptr' szMem
-                              poke (castPtr ptr'') p
-
 -- A finalizer we attach to the 'ForeignPtr' wrapping a mapped OpenCL
 -- memory buffer. This lets us wrap the mapped buffer in a 'Vector',
 -- then release it when the 'Vector' is GC'ed.
