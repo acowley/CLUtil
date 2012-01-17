@@ -36,7 +36,7 @@ main = do s <- ezInit CL_DEVICE_TYPE_ALL
               frame :: Float -> Picture
               frame phase = unsafePerformIO $
                             mkPicture `fmap`
-                            runKernelCPS s k pixels' scale phase
+                            runKernel s k pixels' scale phase
                                       sines cosines
                                       (Out (numPix*4)) (Work2D pixels pixels)
               {-# NOINLINE frame #-}

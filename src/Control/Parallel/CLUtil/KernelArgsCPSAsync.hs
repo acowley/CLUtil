@@ -94,7 +94,7 @@ instance (Storable a, KernelArgsCPSAsync r) => KernelArgsCPSAsync (a -> r) where
 instance (Storable a, KernelArgsCPSAsync r) => 
   KernelArgsCPSAsync (Vector a -> r) where
   setArg s k arg n blockers prep = 
-    \v -> let load cont = withVectorBuffer (clContext s) v $
+    \v -> let load cont = withVectorBuffer s v $
                           \b -> let clean = FreeInput . void $
                                             clReleaseMemObject b
                                 in do clSetKernelArgSto k arg b

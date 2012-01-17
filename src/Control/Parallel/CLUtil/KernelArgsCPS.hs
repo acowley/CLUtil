@@ -25,14 +25,14 @@ import System.IO.Unsafe (unsafePerformIO)
 -- In this variation, reading an output is an action that maps the
 -- OpenCL buffer, and provides a ForeignPtr and the number of elements
 -- in the output vector.
-data PostExec = ReadOutput (IO (IO (ForeignPtr ()), Int))
+data PostExec = ReadOutput (CLMem, Int)
               | FreeInput (IO ())
 
-postToEither :: PostExec -> Either (IO (IO (ForeignPtr ()), Int)) (IO ())
+postToEither :: PostExec -> Either (CLMem, Int) (IO ())
 postToEither (ReadOutput r) = Left r
 postToEither (FreeInput m) = Right m
 
-partitionPost :: [PostExec] -> ([IO (IO (ForeignPtr ()), Int)], [IO ()])
+partitionPost :: [PostExec] -> ([(CLMem, Int)], [IO ()])
 partitionPost = partitionEithers . map postToEither
 
 -- We want to write something like this when dealing with a Vector
@@ -44,7 +44,6 @@ partitionPost = partitionEithers . map postToEither
 --   clSetKernelArg k arg b
 --   cont (FreeInput (void (clReleaseMemObject b)):)
 -- where sz = V.length v * sizeOf (undefined::a)
-
 
 -- The continuation of a buffer preperation step is a function takes a
 -- list of element sizes, and returns an action to perform after
@@ -60,9 +59,10 @@ type PrepCont = ([Int] -> IO (Maybe PostExec, [Int])) -> IO [PostExec]
 type PrepExec = PrepCont -> IO [PostExec]
 
 -- Wrap an output buffer in a 'Vector'.
-mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
-mkRead (getPtr,num) = do fp <- castForeignPtr <$> getPtr
-                         V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 num
+mkRead :: Storable a => CLCommandQueue -> (CLMem, Int) -> IO (Vector a)
+mkRead q (mem, num) = do v <- bufferToVector q mem num []
+                         clReleaseMemObject mem
+                         return v
 
 class KernelArgsCPS a where
   -- Setting an argument requires a state, a kernel, the position of
@@ -84,7 +84,7 @@ nestM outputSizes finish = go [] outputSizes
 
 runCPS :: [Int] -> OpenCLState -> CLKernel -> NumWorkItems -> 
           [PrepExec] -> 
-          IO ([IO (IO (ForeignPtr ()), Int)], [IO ()])
+          IO ([(CLMem, Int)], [IO ()])
 runCPS outputSizes s k n prep =
   partitionPost <$> nestM outputSizes runK prep
   where runK = do ev <- clEnqueueNDRangeKernel (clQueue s) 
@@ -109,10 +109,10 @@ instance forall a. Storable a => KernelArgsCPS (IO (Vector a)) where
     (o,cleanup) <- runCPS [sizeOf (undefined::a)] s k n prep
     r1 <- case o of
                [] -> error "One output bound, none specified"
-               [f] -> mkRead <$> f
+               [f] -> mkRead (clQueue s) f
                _ -> error "More outputs specified than bound"
     sequence_ cleanup
-    r1
+    return r1
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
@@ -124,10 +124,11 @@ instance forall a b. (Storable a, Storable b) =>
     (r1,r2) <- case o of
                  [] -> error "Two output bound, none specified"
                  [_] -> error "Two outputs bound, one specified"
-                 [f,g] -> (,) <$> (mkRead <$> f) <*> (mkRead <$> g)
+                 [f,g] -> let q = clQueue s 
+                          in (,) <$> (mkRead q f) <*> (mkRead q g)
                  _ -> error "More outputs specified than bound"
     sequence_ cleanup
-    (,) <$> r1 <*> r2
+    return (r1,r2)
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
@@ -139,12 +140,13 @@ instance forall a b c. (Storable a, Storable b, Storable c) =>
                            , sizeOf (undefined::c) ]
                            s k n prep
     (r1,r2,r3) <- case o of
-                    [f,g,h] -> (,,) <$> (mkRead <$> f) 
-                                    <*> (mkRead <$> g) 
-                                    <*> (mkRead <$> h)
+                    [f,g,h] -> let q = clQueue s
+                               in (,,) <$> (mkRead q f) 
+                                       <*> (mkRead q g) 
+                                       <*> (mkRead q h)
                     _ -> error "Different number of outputs specified than bound"
     sequence_ cleanup
-    (,,) <$> r1 <*> r2 <*> r3
+    return (r1,r2,r3)
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (a -> r) where
@@ -156,7 +158,7 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (a -> r) where
 -- Handle 'Vector' input arguments.
 instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
   setArgCPS s k arg n prep = 
-    \v -> let load cont = withVectorBuffer (clContext s) v $
+    \v -> let load cont = withVectorBuffer s v $
                           \b -> let clean = FreeInput . void $
                                             clReleaseMemObject b
                                 in do clSetKernelArgSto k arg b
@@ -168,15 +170,6 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
 instance KernelArgsCPS r => KernelArgsCPS (NumWorkItems -> r) where
   setArgCPS s k arg _ prep = \n -> setArgCPS s k arg (Just n) prep
 
--- A finalizer we attach to the 'ForeignPtr' wrapping a mapped OpenCL
--- memory buffer. This lets us wrap the mapped buffer in a 'Vector',
--- then release it when the 'Vector' is GC'ed.
-bufferFinalizer :: CLCommandQueue -> CLMem -> Ptr () -> IO ()
-bufferFinalizer q b p = do clEnqueueUnmapMemObject q b p [] >>=
-                             -- clWaitForEvents . (:[])
-                             clReleaseEvent
-                           void $ clReleaseMemObject b
-
 -- Handle 'Vector' outputs by automatically managing the underlying
 -- OpenCL buffers.
 instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
@@ -186,21 +179,10 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
           allocateOutput [] = error "Couldn't determine output element size"
           allocateOutput (sz:szs) = 
             do b <- clCreateBuffer (clContext s)
-                                   [ CL_MEM_WRITE_ONLY
-                                   , CL_MEM_ALLOC_HOST_PTR ]
+                                   [ CL_MEM_WRITE_ONLY ]
                                    (m*sz, nullPtr)
                clSetKernelArgSto k arg b
-               -- The goal is to map the output buffer, and wrap that
-               -- pointer in a Vector. This would mean that the Vector
-               -- is wrapping memory allocated by OpenCL.
-               let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
-                                                            True [CL_MAP_READ]
-                                                            0 (m*sz) [] 
-                               clReleaseEvent ev
-                               -- clWaitForEvents [ev]
-                               newForeignPtr p $ bufferFinalizer (clQueue s) b p 
-                   finishOutput = return (getPtr,m)
-               return (Just $ ReadOutput finishOutput, szs) 
+               return (Just $ ReadOutput (b,m), szs)
       in setArgCPS s k (arg+1) n (load:prep)
 
 -- |Simple interface for calling an OpenCL kernel. Supports input
