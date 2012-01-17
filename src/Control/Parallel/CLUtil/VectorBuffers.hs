@@ -26,15 +26,20 @@ vectorToBuffer context v =
 
 -- |Pass a function a buffer whose contents are the data underlying a
 -- 'Vector'. In OpenCL parlance, this creates an OpenCL buffer with
--- the @CL_MEM_USE_HOST_PTR@ flag.
+-- the @CL_MEM_USE_HOST_PTR@ flag if the current device is a CPU.
 withVectorBuffer :: forall a b. Storable a => 
-                    CLContext -> Vector a -> (CLMem -> IO b) -> IO b
-withVectorBuffer context v k = 
-  V.unsafeWith v $ \ptr ->
-    clCreateBuffer context
-                   [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR] 
-                   (sz, castPtr ptr) >>= k
+                    OpenCLState -> Vector a -> (CLMem -> IO b) -> IO b
+withVectorBuffer state v k = 
+  do isCPU <- any isCPUDevice `fmap` clGetDeviceType (clDevice state)
+     V.unsafeWith v $ \ptr ->
+       clCreateBuffer (clContext state)
+                      (if isCPU
+                        then [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR] 
+                        else [CL_MEM_READ_ONLY, CL_MEM_COPY_HOST_PTR])
+                      (sz, castPtr ptr) >>= k
   where sz = V.length v * sizeOf (undefined::a)
+        isCPUDevice CL_DEVICE_TYPE_CPU = True
+        isCPUDevice _ = False
 
 -- |Read an OpenCL memory buffer into a 'Vector'.
 bufferToVector :: forall a. Storable a => 
