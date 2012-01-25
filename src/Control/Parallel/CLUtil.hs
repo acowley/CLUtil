@@ -37,7 +37,7 @@ initOutputBuffer s flags n = clCreateBuffer (clContext s) flags (n, nullPtr)
 -- |Initialize the first device of the given type.
 ezInit :: CLDeviceType -> IO OpenCLState
 ezInit t = do (dev:_) <- clGetDeviceIDs nullPtr t
-              context <- clCreateContext [dev] putStrLn
+              context <- clCreateContext [] [dev] putStrLn
               q <- clCreateCommandQueue context dev []
               return $ OpenCLState dev context q
 
