@@ -61,8 +61,8 @@ type PrepExec = PrepCont -> IO [PostExec]
 
 -- Wrap an output buffer in a 'Vector'.
 mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
-mkRead (getPtr,num) = do fp <- castForeignPtr <$> getPtr
-                         V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 num
+mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr 
+                   <$> getPtr
 
 class KernelArgsCPS a where
   -- Setting an argument requires a state, a kernel, the position of
