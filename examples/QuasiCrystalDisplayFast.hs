@@ -22,8 +22,8 @@ angles n = V.map (* (pi / fromIntegral n)) $ V.enumFromN 0 n
 
 mkPicture :: Vector Word8 -> Picture
 mkPicture = flip (bitmapOfForeignPtr pixels pixels) False 
-          . (\(x,_,_) -> x)
-          . V.unsafeToForeignPtr
+          . (\(x,_) -> x)
+          . V.unsafeToForeignPtr0
 
 main = do s <- ezInit CL_DEVICE_TYPE_ALL
           k <- kernelFromFile s "QuasiCrystalRGBAFast.cl" "quasiCrystal"
@@ -37,10 +37,7 @@ main = do s <- ezInit CL_DEVICE_TYPE_ALL
               frame phase = unsafePerformIO $
                             mkPicture `fmap`
                             runKernelCPS s k pixels' scale phase
-                                      sines cosines
-                                      (Out (numPix*4)) (Work2D pixels pixels)
+                                         sines cosines
+                                         (Out (numPix*4)) (Work2D pixels pixels)
               {-# NOINLINE frame #-}
-          -- gloss 1.6 API
           animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
-          -- gloss 1.5 API
-          -- animateInWindow "Quasicrystal" (pixels,pixels) (0,0) black frame
