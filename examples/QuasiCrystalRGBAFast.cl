@@ -3,8 +3,8 @@ float wrap(float);
 __kernel void quasiCrystal(int pixels, 
                            float scale,
                            float phase,
-                           __constant float *cosAngles,
-                           __constant float *sinAngles,
+                           __global float *cosAngles,
+                           __global float *sinAngles,
                            __global uchar *img) {
   int x = get_global_id(0);
   int y = get_global_id(1);

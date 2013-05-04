@@ -5,7 +5,7 @@ __kernel void quasiCrystal(int pixels,
                            float scale,
                            float phase,
                            int numAngles,
-                           __constant float *angles,
+                           __global float *angles,
                            __global uchar *img) {
   int x = get_global_id(0);
   int y = get_global_id(1);
