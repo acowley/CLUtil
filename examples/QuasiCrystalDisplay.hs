@@ -18,8 +18,8 @@ angles n = V.map (* (pi / fromIntegral n)) $ V.enumFromN 0 n
 
 mkPicture :: Vector Word8 -> Picture
 mkPicture = flip (bitmapOfForeignPtr pixels pixels) False 
-          . (\(x,_,_) -> x)
-          . V.unsafeToForeignPtr
+          . (\(x,_) -> x)
+          . V.unsafeToForeignPtr0
 
 main = do s <- ezInit CL_DEVICE_TYPE_ALL
           k <- kernelFromFile s "QuasiCrystalRGBA.cl" "quasiCrystal"
