@@ -9,7 +9,7 @@ import Control.Parallel.CLUtil
 import qualified Data.Vector.Storable as V
 import Data.Word (Word8)
 import Graphics.Gloss hiding (Vector, scale)
-import System.IO.Unsafe
+import Graphics.Gloss.Interface.IO.Animate hiding (Vector, scale)
 
 pixels :: Int
 pixels = 800
@@ -33,11 +33,9 @@ main = do s <- ezInit CL_DEVICE_TYPE_ALL
               allAngles = angles numAngles
               sines = V.snoc (V.map sin allAngles) 0
               cosines = V.snoc (V.map cos allAngles) 0
-              frame :: Float -> Picture
-              frame phase = unsafePerformIO $
-                            mkPicture `fmap`
+              frame :: Float -> IO Picture
+              frame phase = mkPicture `fmap`
                             runKernelCPS s k pixels' scale phase
                                          sines cosines
                                          (Out (numPix*4)) (Work2D pixels pixels)
-              {-# NOINLINE frame #-}
-          animate (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
+          animateIO (InWindow "Quasicrystal" (pixels,pixels) (0,0)) black frame
