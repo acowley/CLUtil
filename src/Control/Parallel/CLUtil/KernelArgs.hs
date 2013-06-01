@@ -142,6 +142,13 @@ instance KernelArgs r => KernelArgs (OutputSize -> r) where
                         return (b,m)
       in setArg s k (arg+1) n (return (Just $ ReadOutput alloc) : prep)
 
+instance (KernelArgs r, Storable a) => KernelArgs (LocalMem a -> r) where
+  setArg s k arg n prep = 
+    \(Local m) -> let sz = m * sizeOf (undefined::a)
+                      local = do clSetKernelArg k arg sz nullPtr
+                                 return Nothing
+                  in setArg s k (arg+1) n (local:prep)
+
 -- |Simple interface for calling an OpenCL kernel. Supports input
 -- 'Vector' and 'Storable' arguments, and produces 'Vector' outputs.
 --

@@ -8,6 +8,7 @@ module Control.Parallel.CLUtil (
   -- * Variable arity kernel execution 
   -- |Similar in spirit to "Text.Printf"
   OutputSize(..), NumWorkItems(..), 
+  LocalMem(..), localFloat, localDouble, localInt, localWord32,
   runKernel, KernelArgs,
   runKernelCPS, KernelArgsCPS,
   runKernelAsync, KernelArgsAsync,

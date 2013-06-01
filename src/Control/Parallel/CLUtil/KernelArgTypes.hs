@@ -2,6 +2,7 @@
 -- with asynchronous execution.
 module Control.Parallel.CLUtil.KernelArgTypes where
 import Control.Parallel.OpenCL
+import Data.Word
 
 -- |A vector that will be written to. The parameter is the number of
 -- elements in the vector.
@@ -32,6 +33,10 @@ localDouble = Local
 -- |@localInt n@ creates a local memory buffer of @n@ 'Int's.
 localInt :: Int -> LocalMem Int
 localInt = Local
+
+-- |@localWord32 n@ creates a local memory buffer @n@ 'Word32's.
+localWord32 :: Int -> LocalMem Word32
+localWord32 = Local
 
 -- |Wraps a 'CLEvent' and a list of cleanup actions to support
 -- asynchronous kernel executions.

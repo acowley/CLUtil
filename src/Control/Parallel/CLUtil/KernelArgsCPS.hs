@@ -163,6 +163,13 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (Vector a -> r) where
                                       cont (\sz -> return (Just clean, sz))
           in setArgCPS s k (arg+1) n (load:prep)
 
+instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (LocalMem a -> r) where
+  setArgCPS s k arg n prep =
+    \(Local m) -> let sz = m * sizeOf (undefined::a)
+                      local cont = do clSetKernelArg k arg sz nullPtr
+                                      cont (\sz -> return (Nothing, sz))
+                  in setArgCPS s k (arg+1) n (local:prep)
+
 -- Keep track of an argument that specifies the number of work items
 -- to execute.
 instance KernelArgsCPS r => KernelArgsCPS (NumWorkItems -> r) where
