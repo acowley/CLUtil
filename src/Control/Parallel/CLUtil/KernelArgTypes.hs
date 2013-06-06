@@ -10,6 +10,7 @@ newtype OutputSize = Out Int
 
 -- |The number of global work items to enqueue. May be 1, 2, or 3D.
 data NumWorkItems = Work1D Int | Work2D Int Int | Work3D Int Int Int
+                    deriving (Eq,Show)
 
 -- |Convert a 'NumWorkItems' into the format expected by
 -- "Control.Parallel.OpenCL".
@@ -17,6 +18,8 @@ workItemsList :: NumWorkItems -> [Int]
 workItemsList (Work1D n) = [n]
 workItemsList (Work2D n m) = [n,m]
 workItemsList (Work3D n m o) = [n,m,o]
+
+newtype WorkGroup = WorkGroup { workGroupSizes :: [Int] }
 
 -- |A local memory buffer of the given length. The phantom type
 -- encodes the element type of the buffer.

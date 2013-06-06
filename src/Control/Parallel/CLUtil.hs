@@ -7,7 +7,7 @@ module Control.Parallel.CLUtil (
   OpenCLState(..),
   -- * Variable arity kernel execution 
   -- |Similar in spirit to "Text.Printf"
-  OutputSize(..), NumWorkItems(..), 
+  OutputSize(..), NumWorkItems(..), WorkGroup(..),
   LocalMem(..), localFloat, localDouble, localInt, localWord32,
   runKernel, KernelArgs,
   runKernelCPS, KernelArgsCPS,
