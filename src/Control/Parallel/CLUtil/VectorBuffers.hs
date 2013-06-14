@@ -54,6 +54,19 @@ bufferToVector q mem count waitForIt =
      V.unsafeFreeze v
   where sz = count * sizeOf (undefined::a)
 
+imageToVector :: forall a. Storable a => 
+                  CLCommandQueue -> CLMem -> (Int,Int,Int) -> [CLEvent] -> IO (Vector a)
+imageToVector q mem dims waitForIt = 
+  do v <- VM.new count
+     _ <- VM.unsafeWith v $ \ptr ->
+            do ev <- clEnqueueReadImage q mem True (0,0,0) dims 0 0
+                                         (castPtr ptr) waitForIt
+               clWaitForEvents [ev]
+               clReleaseEvent ev
+     V.unsafeFreeze v
+  where count = let (w,h,d) = dims in w*h*d
+        sz = count * sizeOf (undefined::a)
+
 -- |Asynchronously read an OpenCL memory buffer into a new
 -- 'Vector'. The returned action blocks until the read is finished,
 -- then produces the 'Vector'.
