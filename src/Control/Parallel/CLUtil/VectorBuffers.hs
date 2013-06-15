@@ -24,6 +24,19 @@ vectorToBuffer context v =
                    (sz, castPtr ptr)
   where sz = V.length v * sizeOf (undefined::a)
 
+-- | @writeVectorToBuffer s mem v@ writes the contents of 'Vector' @v@
+-- to the OpenCL buffer @mem@. This operation blocks until the write
+-- is complete.
+writeVectorToBuffer :: forall a. Storable a
+                    => OpenCLState -> CLMem -> Vector a -> IO ()
+writeVectorToBuffer state mem v =
+  V.unsafeWith v $ \ptr ->
+    do ev <- clEnqueueWriteBuffer (clQueue state) mem True 0 sz (castPtr ptr) []
+       _ <- clWaitForEvents [ev]
+       _ <- clReleaseEvent ev
+       return ()
+  where sz = sizeOf (undefined::a) * V.length v
+
 -- |Pass a function a buffer whose contents are the data underlying a
 -- 'Vector'. In OpenCL parlance, this creates an OpenCL buffer with
 -- the @CL_MEM_USE_HOST_PTR@ flag if the current device is a CPU.
