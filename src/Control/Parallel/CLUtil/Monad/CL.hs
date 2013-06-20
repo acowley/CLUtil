@@ -1,6 +1,9 @@
+{-# LANGUAGE FlexibleContexts #-}
 -- | A monad transformer stack for working with OpenCL.
-module Control.Parallel.CLUtil.Monad.CL (CL, runCL, runCL', CLReleasable(..),
-                                         ask, throwError, liftIO, okay) where
+module Control.Parallel.CLUtil.Monad.CL 
+  (CL, runCL, runCL', CLReleasable(..),
+   ask, throwError, liftIO, okay
+  ) where
 import Control.Applicative ((<$>))
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Class (lift)

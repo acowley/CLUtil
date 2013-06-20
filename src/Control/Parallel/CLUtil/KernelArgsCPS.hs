@@ -5,22 +5,18 @@
 module Control.Parallel.CLUtil.KernelArgsCPS (KernelArgsCPS, runKernelCPS) where
 import Control.Applicative
 import Control.Monad (void, when)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Either (partitionEithers)
-import Data.Maybe (catMaybes)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
-import qualified Data.Vector.Storable.Mutable as VM
 import Foreign.Concurrent (newForeignPtr)
-import Foreign.ForeignPtr (ForeignPtr, castForeignPtr, withForeignPtr, 
-                           mallocForeignPtrBytes)
-import Foreign.Marshal.Alloc (malloc, free)
-import Foreign.Ptr (castPtr, nullPtr, plusPtr, FunPtr, Ptr)
+import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
+import Foreign.Ptr (nullPtr, Ptr)
 import Foreign.Storable (Storable(..))
 import Control.Parallel.CLUtil.KernelArgTypes 
 import Control.Parallel.CLUtil.State
 import Control.Parallel.CLUtil.VectorBuffers
 import Control.Parallel.OpenCL
-import System.IO.Unsafe (unsafePerformIO)
 
 -- In this variation, reading an output is an action that maps the
 -- OpenCL buffer, and provides a ForeignPtr and the number of elements
@@ -92,21 +88,23 @@ runCPS outputSizes s k n wg prep =
                                                (workItemsList n)
                                                (maybe [] workGroupSizes wg)
                                                []
-                  clWaitForEvents [ev]
+                  _ <- clWaitForEvents [ev]
                   void $ clReleaseEvent ev
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
-instance KernelArgsCPS (IO ()) where
-  setArgCPS s k _ (Just n) wg prep = do
+instance MonadIO m => KernelArgsCPS (m ()) where
+  setArgCPS s k _ (Just n) wg prep = liftIO $ do
     (o,cleanup) <- runCPS [] s k n wg prep
     when (not (null o)) (error "Outputs aren't bound!")
     sequence_ cleanup
+  setArgCPS _ _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Execute a kernel where the calling context is expecting a single
 -- 'Vector' return value.
-instance forall a. Storable a => KernelArgsCPS (IO (Vector a)) where
-  setArgCPS s k _ (Just n) wg prep = do
+instance forall a m. (Storable a, MonadIO m)
+  => KernelArgsCPS (m (Vector a)) where
+  setArgCPS s k _ (Just n) wg prep = liftIO $ do
     (o,cleanup) <- runCPS [sizeOf (undefined::a)] s k n wg prep
     r1 <- case o of
                [] -> error "One output bound, none specified"
@@ -114,12 +112,13 @@ instance forall a. Storable a => KernelArgsCPS (IO (Vector a)) where
                _ -> error "More outputs specified than bound"
     sequence_ cleanup
     r1
+  setArgCPS _ _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance forall a b. (Storable a, Storable b) => 
-  KernelArgsCPS (IO (Vector a, Vector b)) where
-  setArgCPS s k _ (Just n) wg prep = do
+instance forall a b m. (Storable a, Storable b, MonadIO m) => 
+  KernelArgsCPS (m (Vector a, Vector b)) where
+  setArgCPS s k _ (Just n) wg prep = liftIO $ do
     (o, cleanup) <- runCPS [sizeOf (undefined::a), sizeOf (undefined::b)]
                            s k n wg prep
     (r1,r2) <- case o of
@@ -129,12 +128,13 @@ instance forall a b. (Storable a, Storable b) =>
                  _ -> error "More outputs specified than bound"
     sequence_ cleanup
     (,) <$> r1 <*> r2
+  setArgCPS _ _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance forall a b c. (Storable a, Storable b, Storable c) => 
-  KernelArgsCPS (IO (Vector a, Vector b, Vector c)) where
-  setArgCPS s k _ (Just n) wg prep = do
+instance forall a b c m. (Storable a, Storable b, Storable c, MonadIO m) => 
+  KernelArgsCPS (m (Vector a, Vector b, Vector c)) where
+  setArgCPS s k _ (Just n) wg prep = liftIO $ do
     (o, cleanup) <- runCPS [ sizeOf (undefined::a)
                            , sizeOf (undefined::b)
                            , sizeOf (undefined::c) ]
@@ -146,6 +146,7 @@ instance forall a b c. (Storable a, Storable b, Storable c) =>
                     _ -> error "Different number of outputs specified than bound"
     sequence_ cleanup
     (,,) <$> r1 <*> r2 <*> r3
+  setArgCPS _ _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (a -> r) where
