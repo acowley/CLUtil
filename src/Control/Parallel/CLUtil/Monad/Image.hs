@@ -150,7 +150,7 @@ imageCompatible (CLImageFormat order dtype) _
   | otherwise = return ()
 
 -- | Common constraint for 'CLImage' type parameters.
-type ValidImage n b = (ChanCompatible n, TypeCompatible b)
+type ValidImage n b = (ChanCompatible n,ChanSize n,Storable b,TypeCompatible b)
 
 -- | Allocate a new 2D or 3D image of the given dimensions.
 allocImage' :: forall a f n b.
@@ -176,7 +176,40 @@ allocImage :: forall f a n b.
 allocImage flags = allocImage' flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
 
--- | Write a 'Vector''s contents to a 2D or 3D image.
+-- | Initialize a new 2D or 3D image of the given dimensions with a
+-- 'Vector' of pixel data. Note that the pixel data is /flattened/
+-- across however many channels each pixel may represent. For example,
+-- if we have a three channel RGB image with a data type of 'Float',
+-- then we expect a 'Vector Float' with a number of elements equal to
+-- 3 times the number of pixels.
+initImage' :: forall a f n b.
+              (Integral a, Foldable f, Functor f, Storable b, ValidImage n b)
+           => [CLMemFlag] -> CLImageFormat -> f a -> Vector b
+           -> CL (CLImage n b)
+initImage' flags fmt dims v =
+  do imageCompatible fmt (Proxy::Proxy (CLImage n b))
+     when (V.length v /= fromIntegral (F.product dims)*numChan (Proxy::Proxy n))
+          (throwError "Vector is not the same size as the desired image")
+     c <- clContext <$> ask
+     case F.toList (fromIntegral <$> dims) of
+       [w,h]   -> fmap (CLImage (w,h,1)) . liftIO . V.unsafeWith v $
+                    clCreateImage2D c flags fmt w h 0 . castPtr
+       [w,h,d] -> fmap (CLImage (w,h,d)) . liftIO . V.unsafeWith v $
+                    clCreateImage3D c flags fmt w h d 0 0 . castPtr
+       _       -> throwError "Only 2D and 3D images are currently supported!"
+
+-- | Initialize an image of the given dimensions with the a 'Vector'
+-- of pixel data. A default image format is deduced from the return
+-- type. See 'initImage'' for more information on requirements of the
+-- input 'Vector'.
+initImage :: forall f a n b.
+             (Integral a, Foldable f, Functor f, ValidImage n b)
+          => [CLMemFlag] -> f a -> Vector b -> CL (CLImage n b)
+initImage flags = initImage' flags fmt
+  where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
+-- | Write a 'Vector''s contents to a 2D or 3D image. The 'Vector'
+-- must be the same size as the target image.
 writeImage :: forall n a. Storable a => CLImage n a -> Vector a -> CL ()
 writeImage (CLImage dims@(w,h,d) mem) v = 
   do q <- clQueue <$> ask
