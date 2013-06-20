@@ -7,7 +7,7 @@ import Control.Parallel.CLUtil
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Foreign.Ptr (castPtr, nullPtr)
-import Foreign.Storable (Storable(sizeOf))
+import Foreign.Storable (Storable(..))
 
 import Control.Parallel.CLUtil.Monad.CL
 
@@ -16,6 +16,19 @@ import Control.Parallel.CLUtil.Monad.CL
 -- naturally map to an OpenCL type (e.g. 'Word8', 'Int32', 'Float').
 data CLBuffer a = CLBuffer { bufferLength :: Int
                            , bufferObject :: CLMem }
+
+-- | NOTE: This is an EVIL 'Storable' instance that lets us treat a
+-- 'CLBuffer' as its underlying 'CLMem' value for the sake of
+-- interoperating with OpenCL. The 'Storable' instance does /not/ let
+-- you roundtrip a value using 'peek' and 'poke'.
+instance Storable (CLBuffer a) where
+  sizeOf _ = sizeOf (undefined::CLMem)
+  alignment _ = alignment (undefined::CLMem)
+  peek = fmap (CLBuffer (error "Tried to peek a CLBuffer")) . peek . castPtr
+  poke ptr (CLBuffer _ m) = poke (castPtr ptr) m
+
+instance CLReleasable (CLBuffer a) where
+  releaseObject (CLBuffer _ m) = clReleaseMemObject m
 
 -- | Allocate a new buffer object of the given number of elements.
 allocBuffer :: forall a. Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)

@@ -1,5 +1,5 @@
 -- | A monad transformer stack for working with OpenCL.
-module Control.Parallel.CLUtil.Monad.CL (CL, runCL, runCL',
+module Control.Parallel.CLUtil.Monad.CL (CL, runCL, runCL', CLReleasable(..),
                                          ask, throwError, liftIO, okay) where
 import Control.Applicative ((<$>))
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -33,3 +33,8 @@ ask = lift R.ask
 okay :: MonadIO m => String -> IO Bool -> ErrorT String m ()
 okay msg m = do f <- liftIO m
                 if f then return () else throwError $ "Failed: " ++ msg
+
+-- | A class for things that can be released from OpenCL.
+class CLReleasable a where
+  -- | Decrement the reference count of a memory object.
+  releaseObject :: a -> IO Bool

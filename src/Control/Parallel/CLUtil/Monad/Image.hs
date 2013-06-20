@@ -24,6 +24,21 @@ data NumChan = OneChan | TwoChan | ThreeChan | FourChan
 data CLImage (n::NumChan) a = CLImage { imageDims   :: (Int,Int,Int)
                                       , imageObject :: CLMem }
 
+instance CLReleasable (CLImage n a) where
+  releaseObject (CLImage _ m) = clReleaseMemObject m
+
+-- | A 'CLImage' with one channel per pixel.
+type CLImage1 = CLImage OneChan
+
+-- | A 'CLImage' with two channels per pixel.
+type CLImage2 = CLImage TwoChan
+
+-- | A 'CLImage' with three channels per pixel.
+type CLImage3 = CLImage ThreeChan
+
+-- | A 'CLImage' with four channels per pixel.
+type CLImage4 = CLImage FourChan
+
 -- Kind-polymorphic proxy to pass types around.
 data Proxy a = Proxy
 
@@ -111,9 +126,8 @@ instance ChanSize FourChan  where numChan _ = 4
 instance Storable (CLImage n a) where
   sizeOf _ = sizeOf (undefined::CLMem)
   alignment _ = alignment (undefined::CLMem)
-  peek = fmap (CLImage (0,0,0)) . peek . castPtr
+  peek = fmap (CLImage (error "Tried to peek a CLImage")) . peek . castPtr
   poke ptr (CLImage _ m) = poke (castPtr ptr) m
-
 
 -- | Compute a default 'CLImageFormat' for a given 'CLImage' type.
 defaultFormat :: forall n b. (ValidImage n b)

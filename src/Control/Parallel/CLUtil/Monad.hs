@@ -3,7 +3,7 @@
              ConstraintKinds, DataKinds, KindSignatures, PolyKinds #-}
 module Control.Parallel.CLUtil.Monad (
     -- * The CL Monad
-    CL, runCL, runCL',
+    CL, runCL, runCL', releaseObject,
     -- * Buffer Objects
     CLBuffer(..), allocBuffer, initBuffer, readBuffer, readBuffer', writeBuffer,
     -- * Image Objects
