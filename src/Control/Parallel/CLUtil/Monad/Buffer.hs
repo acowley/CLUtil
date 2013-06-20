@@ -39,10 +39,11 @@ allocBuffer flags n =
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it.
-initBuffer :: forall a. Storable a => [CLMemFlag] -> Vector a -> CL CLMem
+initBuffer :: forall a. Storable a => [CLMemFlag] -> Vector a -> CL (CLBuffer a)
 initBuffer flags v = 
   do c <- clContext <$> ask
-     liftIO . V.unsafeWith v $ clCreateBuffer c flags . (sz,) . castPtr
+     fmap (CLBuffer (V.length v)) . liftIO . V.unsafeWith v $
+       clCreateBuffer c flags . (sz,) . castPtr
   where sz = V.length v * sizeOf (undefined::a)
 
 -- | @readBuffer' mem n events@ reads back a 'Vector' of @n@ elements
