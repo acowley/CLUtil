@@ -17,12 +17,12 @@ module Control.Parallel.CLUtil (
   initOutputBuffer,
   CLAsync(..), waitCLAsync, waitCLAsyncs,
   -- * Re-exports for convenience
-  module Control.Parallel.OpenCL, Vector, CInt
+  module Control.Parallel.OpenCL, Vector, CInt, CFloat
   ) where
 import Control.Parallel.OpenCL
 import Control.Monad (void, (>=>))
 import Data.Vector.Storable (Vector)
-import Foreign.C.Types (CInt)
+import Foreign.C.Types (CInt, CFloat)
 import Foreign.Ptr (nullPtr)
 import Control.Parallel.CLUtil.State
 import Control.Parallel.CLUtil.VectorBuffers
