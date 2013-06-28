@@ -4,8 +4,7 @@
 -- input vectors when kicking off kernel execution.
 module Control.Parallel.CLUtil.KernelArgsAsync 
   (KernelArgsAsync, runKernelAsync) where
-import Control.Monad (void, when)
-import Data.Either (partitionEithers)
+import Control.Monad (void)
 import Data.Maybe (catMaybes)
 import Data.Vector.Storable (Vector)
 import Foreign (Storable)
@@ -17,7 +16,7 @@ import Control.Parallel.OpenCL
 -- Free an input buffer
 type PostExec = IO ()
 
--- A class for running kernels asynchronously. This class does not
+-- | A class for running kernels asynchronously. This class does not
 -- have instances for returning 'Vector' values. The only possibile
 -- return value is a 'CLAsync' that the user can wait on before
 -- reading back results.
@@ -38,6 +37,7 @@ instance KernelArgsAsync (IO CLAsync) where
     waitCLAsyncs blockers
     exec <- clEnqueueNDRangeKernel (clQueue s) k (workItemsList n) [] []
     return $ CLAsync exec cleanup
+  setArg _ _ _ Nothing _ _ = error "The number of work items is missing!"
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsAsync r) => KernelArgsAsync (a -> r) where

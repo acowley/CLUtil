@@ -60,6 +60,11 @@ mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
 mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr 
                    <$> getPtr
 
+-- | Variable arity class patterned on "Text.Printf". Input 'Vector's
+-- are treated by directly using their internal data when an OpenCL
+-- kernel is run on the CPU. This is in contrast to a treatment where
+-- input 'Vector's are explicitly copied into OpenCL memory buffers
+-- before a kernel is run.
 class KernelArgsCPS a where
   -- Setting an argument requires a state, a kernel, the position of
   -- the argument, the number of work items specified so far, and a
@@ -169,7 +174,7 @@ instance (Storable a, KernelArgsCPS r) => KernelArgsCPS (LocalMem a -> r) where
   setArgCPS s k arg n wg prep =
     \(Local m) -> let sz = m * sizeOf (undefined::a)
                       local cont = do clSetKernelArg k arg sz nullPtr
-                                      cont (\sz -> return (Nothing, sz))
+                                      cont (\sz' -> return (Nothing, sz'))
                   in setArgCPS s k (arg+1) n wg (local:prep)
 
 -- Keep track of an argument that specifies the number of work items
@@ -185,9 +190,9 @@ instance KernelArgsCPS r => KernelArgsCPS (WorkGroup -> r) where
 -- memory buffer. This lets us wrap the mapped buffer in a 'Vector',
 -- then release it when the 'Vector' is GC'ed.
 bufferFinalizer :: CLCommandQueue -> CLMem -> Ptr () -> IO ()
-bufferFinalizer q b p = do clEnqueueUnmapMemObject q b p [] >>=
-                             -- clWaitForEvents . (:[])
-                             clReleaseEvent
+bufferFinalizer q b p = do _ <- clEnqueueUnmapMemObject q b p [] >>=
+                                  -- clWaitForEvents . (:[])
+                                  clReleaseEvent
                            void $ clReleaseMemObject b
 
 -- Handle 'Vector' outputs by automatically managing the underlying
@@ -209,7 +214,7 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
                let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
                                                             True [CL_MAP_READ]
                                                             0 (m*sz) [] 
-                               clReleaseEvent ev
+                               _ <- clReleaseEvent ev
                                -- clWaitForEvents [ev]
                                newForeignPtr p $ bufferFinalizer (clQueue s) b p 
                    finishOutput = return (getPtr,m)
@@ -219,8 +224,7 @@ instance KernelArgsCPS r => KernelArgsCPS (OutputSize -> r) where
 -- |Simple interface for calling an OpenCL kernel. Supports input
 -- 'Vector' and 'Storable' arguments, and produces 'Vector'
 -- outputs. Uses the actual pointers underlying any vector arguments,
--- improving performance of kernels run on the CPU. NOTE: some GPU
--- OpenCL drivers do not support this usage.
+-- improving performance of kernels run on the CPU.
 -- 
 -- > (v1,v2) <- runKernelCPS cluState kernel vIn (Work1D 4) (Out 4) (Out 4)
 runKernelCPS :: KernelArgsCPS a => OpenCLState -> CLKernel -> a

@@ -1,7 +1,17 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, KindSignatures, PolyKinds, 
              ScopedTypeVariables #-}
 -- | Typed monadic interface for working with OpenCL images.
-module Control.Parallel.CLUtil.Monad.Image where
+module Control.Parallel.CLUtil.Monad.Image (
+  -- * Image types
+  CLImage(..), NumChan(..), CLImage1, CLImage2, CLImage3, CLImage4,
+  ChanSize(..),
+
+  -- * Creating images
+  allocImage, allocImage', initImage, initImage',
+
+  -- * Workign with images
+  readImage', readImage, writeImage
+  ) where
 import Control.Applicative ((<$>))
 import Control.Monad (when)
 import Data.Foldable (Foldable)
@@ -10,7 +20,6 @@ import Data.Int (Int8, Int16, Int32)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Data.Word (Word8, Word16, Word32)
-import Foreign.C.Types (CFloat)
 import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
 import Control.Parallel.CLUtil

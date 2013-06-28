@@ -1,4 +1,11 @@
 {-# LANGUAGE FlexibleContexts #-}
+-- | When initializing a program that makes use of OpenCL, a common
+-- need is to load several kernels from the same source program
+-- file. These simple caching utilities free you from needing to
+-- couple the initialization of various processing stages due to
+-- overlapped resource usage (i.e. programs or kernels). Instead,
+-- initializers may independently use 'getKernel' without worrying if
+-- a program or kernel has already been loaded by someone else.
 module Control.Parallel.CLUtil.Monad.ProgramCache
   (getKernel, emptyCache, Cache) where
 import Control.Monad.IO.Class

@@ -1,6 +1,4 @@
 -- | A convenient monadic interface for working with OpenCL.
-{-# LANGUAGE ScopedTypeVariables, TupleSections, 
-             ConstraintKinds, DataKinds, KindSignatures, PolyKinds #-}
 module Control.Parallel.CLUtil.Monad (
     -- * The CL Monad
     CL, runCL, runCL', releaseObject,

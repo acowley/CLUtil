@@ -49,8 +49,6 @@ writeVectorToImage state mem dims v =
        _ <- clWaitForEvents [ev]
        _ <- clReleaseEvent ev
        return ()
-  where sz = sizeOf (undefined::a) * V.length v
-
 
 -- |Pass a function a buffer whose contents are the data underlying a
 -- 'Vector'. In OpenCL parlance, this creates an OpenCL buffer with
@@ -77,11 +75,12 @@ bufferToVector q mem count waitForIt =
      _ <- VM.unsafeWith v $ \ptr ->
             do ev <- clEnqueueReadBuffer q mem True 0 sz 
                                          (castPtr ptr) waitForIt
-               clWaitForEvents [ev]
+               _ <- clWaitForEvents [ev]
                clReleaseEvent ev
      V.unsafeFreeze v
   where sz = count * sizeOf (undefined::a)
 
+-- | Read an OpenCL image into a 'Vector'.
 imageToVector :: forall a. Storable a => 
                   CLCommandQueue -> CLMem -> (Int,Int,Int) -> [CLEvent] -> IO (Vector a)
 imageToVector q mem dims waitForIt = 
@@ -89,11 +88,10 @@ imageToVector q mem dims waitForIt =
      _ <- VM.unsafeWith v $ \ptr ->
             do ev <- clEnqueueReadImage q mem True (0,0,0) dims 0 0
                                          (castPtr ptr) waitForIt
-               clWaitForEvents [ev]
+               _ <- clWaitForEvents [ev]
                clReleaseEvent ev
      V.unsafeFreeze v
   where count = let (w,h,d) = dims in w*h*d
-        sz = count * sizeOf (undefined::a)
 
 -- |Asynchronously read an OpenCL memory buffer into a new
 -- 'Vector'. The returned action blocks until the read is finished,
@@ -104,8 +102,8 @@ bufferToVectorAsync :: forall a b. (Storable a, Integral b) =>
 bufferToVectorAsync q mem count waitForIt = 
   do ptr <- mallocBytes (count' * sizeOf (undefined::a))
      readEvent <- clEnqueueReadBuffer q mem False 0 sz (castPtr ptr) waitForIt
-     return $ do clWaitForEvents [readEvent]
-                 clReleaseEvent readEvent
+     return $ do _ <- clWaitForEvents [readEvent]
+                 _ <- clReleaseEvent readEvent
                  fp <- newForeignPtr finalizerFree ptr
                  V.unsafeFreeze $ VM.unsafeFromForeignPtr fp 0 count'
   where sz = count' * sizeOf (undefined::a)

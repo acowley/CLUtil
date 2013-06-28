@@ -19,6 +19,7 @@ workItemsList (Work1D n) = [n]
 workItemsList (Work2D n m) = [n,m]
 workItemsList (Work3D n m o) = [n,m,o]
 
+-- | Specify local workgroup sizes for each dimension.
 newtype WorkGroup = WorkGroup { workGroupSizes :: [Int] }
 
 -- |A local memory buffer of the given length. The phantom type
@@ -56,7 +57,7 @@ waitCLAsync (CLAsync ev cleanup) = clWaitForEvents [ev] >>
 -- |Wait for a list of asynchronous operations to complete, then
 -- cleanup associated resources.
 waitCLAsyncs :: [CLAsync] -> IO ()
-waitCLAsyncs asyncs = do clWaitForEvents evs
+waitCLAsyncs asyncs = do _ <- clWaitForEvents evs
                          mapM_ clReleaseEvent evs
                          sequence_ $ concatMap cleanupActions asyncs
   where evs = map asyncEvent asyncs

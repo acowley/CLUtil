@@ -10,7 +10,6 @@ import Control.Arrow (second)
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
 import Data.Vector.Storable (Vector)
-import Foreign.ForeignPtr (ForeignPtr)
 import Foreign.Storable (Storable)
 import Control.Parallel.CLUtil.KernelArgTypes
 import Control.Parallel.CLUtil.State
@@ -34,6 +33,11 @@ type PrepCont a = ([PostExec] -> [PostExec]) -> IO (a, [PostExec])
 -- option to update the list of PostExec actions if it chooses to.
 type PrepExec a = PrepCont a -> IO (a, [PostExec])
 
+-- | A class for running kernels asynchronously. This class does not
+-- have instances for returning 'Vector' values. The only possibile
+-- return value is a 'CLAsync' that the user can wait on before
+-- reading back results. Input 'Vector's are not copied when a kernel
+-- is run on the CPU.
 class KernelArgsCPSAsync a where
   -- Identical to the setArg method of the KernelArgs class with the
   -- addition of a list of 'CLAsync' events to wait on before

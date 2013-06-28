@@ -17,7 +17,7 @@ import Control.Parallel.CLUtil.Monad.CL
 data CLBuffer a = CLBuffer { bufferLength :: Int
                            , bufferObject :: CLMem }
 
--- | NOTE: This is an EVIL 'Storable' instance that lets us treat a
+-- | NOTE: This is an /EVIL/ 'Storable' instance that lets us treat a
 -- 'CLBuffer' as its underlying 'CLMem' value for the sake of
 -- interoperating with OpenCL. The 'Storable' instance does /not/ let
 -- you roundtrip a value using 'peek' and 'poke'.

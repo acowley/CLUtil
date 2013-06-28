@@ -29,11 +29,10 @@ partitionPost = partitionEithers . map postToEither
 -- read.
 mkRead :: Storable a => CLCommandQueue -> (CLMem, Int) -> IO (Vector a)
 mkRead q (mem,num) = do v <- bufferToVector q mem num []
-                        clReleaseMemObject mem
+                        _ <- clReleaseMemObject mem
                         return v
 
--- Variable arguments class patterned on Printf.
-
+-- | Variable arity class patterned on "Text.Printf".
 class KernelArgs a where
   -- Setting an argument requires a state, a kernel, the position of
   -- the argument, the number of work items specified so far, and a
@@ -50,7 +49,7 @@ enqKernelAndWait :: CLCommandQueue -> CLKernel -> NumWorkItems
 enqKernelAndWait q k n wg = 
   do exec <- clEnqueueNDRangeKernel q k (workItemsList n) 
                (maybe [] workGroupSizes wg) []
-     clWaitForEvents [exec]
+     _ <- clWaitForEvents [exec]
      void $ clReleaseEvent exec
 
 -- Synchronous execution of a kernel with no automatic outputs. This

@@ -66,6 +66,8 @@ mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
 mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr 
                    <$> getPtr
 
+-- | Implementation of a variable arity technique similar to
+-- "Text.Printf".
 class KernelArgsCL a where
   -- Setting an argument requires a state, a kernel, the position of
   -- the argument, the number of work items specified so far, and a
@@ -226,11 +228,10 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
       in setArgCL k (arg+1) n wg (load:prep)
 
 -- |Simple interface for calling an OpenCL kernel. Supports input
--- 'Vector' and 'Storable' arguments, and produces 'Vector'
+-- 'Vector' and 'Storable' arguments, and produces 'Vector' or unit
 -- outputs. Uses the actual pointers underlying any vector arguments,
--- improving performance of kernels run on the CPU. NOTE: some GPU
--- OpenCL drivers do not support this usage.
+-- improving performance of kernels run on the CPU.
 -- 
--- > (v1,v2) <- runKernelCPS cluState kernel vIn (Work1D 4) (Out 4) (Out 4)
+-- > (v1,v2) <- runKernelCL kernel vIn (Work1D 4) (Out 4) (Out 4)
 runKernelCL :: KernelArgsCL a => CLKernel -> a
 runKernelCL k = setArgCL k 0 Nothing Nothing []
