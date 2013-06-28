@@ -29,6 +29,7 @@ Library
                        Control.Parallel.CLUtil.Monad.Image,
                        Control.Parallel.CLUtil.Monad.KernelArgsCL,
                        Control.Parallel.CLUtil.Monad.ProgramCache,
+                       Control.Parallel.CLUtil.Monad.BufferImageInterop,
                        Control.Parallel.CLUtil.State,
                        Control.Parallel.CLUtil.VectorBuffers,
                        Control.Parallel.CLUtil.KernelArgTypes
