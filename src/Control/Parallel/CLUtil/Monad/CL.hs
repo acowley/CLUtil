@@ -21,7 +21,8 @@ type CL = ErrorT String (StateT Cache (ReaderT OpenCLState IO))
 -- | Run a 'CL' action with a given 'OpenCLState'. Any errors are
 -- raised by calling 'error'.
 runCL :: OpenCLState -> CL a -> IO a
-runCL s m = either error id <$> runReaderT (evalStateT (runErrorT m) emptyCache) s
+runCL s m = runReaderT (evalStateT (runErrorT m) emptyCache) s
+            >>= either error return
 
 -- | Run a 'CL' action with a given 'OpenCLState'. The result is
 -- 'Either' an error message or the result of the action.
