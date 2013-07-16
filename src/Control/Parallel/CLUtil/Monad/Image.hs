@@ -141,7 +141,7 @@ instance Storable (CLImage n a) where
 -- | Compute a default 'CLImageFormat' for a given 'CLImage' type.
 defaultFormat :: forall n b. (ValidImage n b)
               => Proxy (CLImage n b) -> CLImageFormat
-defaultFormat _ = CLImageFormat (defaultChan (Proxy::Proxy n)) 
+defaultFormat _ = CLImageFormat (defaultChan (Proxy::Proxy n))
                                 (typeCompatible (Proxy::Proxy b))
 
 -- | Raise an error in if a 'CLImageFormat' is not compatible with a
@@ -251,7 +251,7 @@ readImage' (CLImage dims@(w,h,d) mem) origin region waitForIt =
           (throwError "Each dimension of requested region must be positive!")
      when (not $ tripAll (>=0) origin)
           (throwError "Each dimension of requested origin must be nonnegative!")
-     when (not $ tripZipAll (<) (tripZip (+) origin region) dims)
+     when (not $ tripZipAll (<=) (tripZip (+) origin region) dims)
           (throwError "Requested region extends oustide the image!")
      q <- clQueue <$> ask
      v <- liftIO $ VM.new n
