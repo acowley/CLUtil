@@ -9,8 +9,9 @@ module Control.Parallel.CLUtil.Monad.Image (
   -- * Creating images
   allocImage, allocImage', initImage, initImage',
 
-  -- * Workign with images
-  readImage', readImage, writeImage
+  -- * Working with images
+  readImage', readImage, readImageAsync', readImageAsync, 
+  writeImage, writeImageAsync
   ) where
 import Control.Applicative ((<$>))
 import Control.Monad (when)
@@ -24,6 +25,7 @@ import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
 import Control.Parallel.CLUtil
 import Control.Parallel.CLUtil.Monad.CL
+import Control.Parallel.CLUtil.Monad.Async
 
 -- | The number of channels for image types.
 data NumChan = OneChan | TwoChan | ThreeChan | FourChan
@@ -218,17 +220,24 @@ initImage flags = initImage' flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
 
 -- | Write a 'Vector''s contents to a 2D or 3D image. The 'Vector'
--- must be the same size as the target image.
-writeImage :: forall n a. Storable a => CLImage n a -> Vector a -> CL ()
-writeImage (CLImage dims@(w,h,d) mem) v = 
+-- must be the same size as the target image. NOTE: Multi-dimensional
+-- pixels must be unpacked into a flat array. This means that, if you
+-- want to upload RGBA pixels to a 2D image, you must provide a
+-- 'Vector CFloat' of length @4 * imageWidth * imageHeight@.
+writeImageAsync :: forall n a. (Storable a, ChanSize n)
+                => CLImage n a -> Vector a -> CL (CLAsync ())
+writeImageAsync (CLImage dims@(w,h,d) mem) v = 
   do q <- clQueue <$> ask
-     when (w*h*d /= V.length v)
+     when (w*h*d*numChan (Proxy::Proxy n) /= V.length v)
           (throwError "Vector length is not equal to image dimensions!")
      ev <- liftIO . V.unsafeWith v $ \ptr ->
              clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr) []
-     when (ev /= nullPtr)
-          (do okay "wait for event" $ clWaitForEvents [ev]
-              okay "release event" $ clReleaseEvent ev)
+     return (ev, return ())
+
+-- | Perform a blocking write of a 'Vector''s contents to an
+-- image. See 'writeImageAsync' for more information.
+writeImage :: (Storable a, ChanSize n) => CLImage n a -> Vector a -> CL ()
+writeImage img v = writeImageAsync img v >>= waitOne
 
 tripZipAll :: (a -> a -> Bool) -> (a,a,a) -> (a,a,a) -> Bool
 tripZipAll = ((tripAll id .) .) . tripZip
@@ -242,11 +251,15 @@ tripAll f (x,y,z) = f x && f y && f z
 -- | @readImage' mem origin region events@ reads back a 'Vector' of
 -- the image @mem@ from coordinate @origin@ of size @region@
 -- (i.e. @region ~ (width,height,depth)@) after waiting for @events@
--- to finish.
-readImage' :: forall n a. (Storable a, ChanSize n)
-           => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
-           -> CL (Vector a)
-readImage' (CLImage dims@(w,h,d) mem) origin region waitForIt =
+-- to finish. This operation is non-blocking. The resulting 'CLAsync'
+-- value includes a 'CLEvent' that must be waited upon before using
+-- the result of the read operation. See the
+-- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
+-- working with asynchronous computations.
+readImageAsync' :: forall n a. (Storable a, ChanSize n)
+                => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
+                -> CL (CLAsync (Vector a))
+readImageAsync' (CLImage dims@(w,h,d) mem) origin region waitForIt =
   do when (not $ tripAll (>0) region)
           (throwError "Each dimension of requested region must be positive!")
      when (not $ tripAll (>=0) origin)
@@ -258,12 +271,29 @@ readImage' (CLImage dims@(w,h,d) mem) origin region waitForIt =
      ev <- liftIO . VM.unsafeWith v $ \ptr ->
              clEnqueueReadImage q mem True origin region 0 0
                                 (castPtr ptr) waitForIt
-     when (ev /= nullPtr)
-          (do okay "wait for event" $ clWaitForEvents [ev]
-              okay "release event" $ clReleaseEvent ev)
-     liftIO $ V.unsafeFreeze v
+     return (ev, liftIO $ V.unsafeFreeze v)
   where n = fromIntegral $ w*h*d*numChan (Proxy::Proxy n)
 
--- | Read the entire contents of an image into a 'Vector'.
+-- | @readImage' mem origin region events@ reads back a 'Vector' of
+-- the image @mem@ from coordinate @origin@ of size @region@
+-- (i.e. @region ~ (width,height,depth)@) after waiting for @events@
+-- to finish. This operation blocks until the operation is complete.
+readImage' :: forall n a. (Storable a, ChanSize n)
+           => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
+           -> CL (Vector a)
+readImage' img origin region waitForIt =
+  readImageAsync' img origin region waitForIt >>= waitOne
+
+-- | Read the entire contents of an image into a 'Vector'. This
+-- operation blocks until the read is complete.
 readImage :: (Storable a, ChanSize n) => CLImage n a -> CL (Vector a)
 readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
+
+-- | Non-blocking complete image read. The resulting 'CLAsync' value
+-- includes a 'CLEvent' that must be waited upon before using the
+-- result of the read operation. See the
+-- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
+-- working with asynchronous computations.
+readImageAsync :: (Storable a, ChanSize n)
+               => CLImage n a -> CL (CLAsync (Vector a))
+readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []

@@ -18,25 +18,25 @@ type PostExec = IO ()
 
 -- | A class for running kernels asynchronously. This class does not
 -- have instances for returning 'Vector' values. The only possibile
--- return value is a 'CLAsync' that the user can wait on before
+-- return value is a 'IOAsync' that the user can wait on before
 -- reading back results.
 class KernelArgsAsync a where
   -- Identical to the setArg method of the KernelArgs class with the
-  -- addition of a list of 'CLAsync' events to wait on before
+  -- addition of a list of 'IOAsync' events to wait on before
   -- executing the kernel.
   setArg :: OpenCLState -> CLKernel -> CLuint -> Maybe NumWorkItems ->
-            [CLAsync] -> [IO (Maybe PostExec)] -> a
+            [IOAsync] -> [IO (Maybe PostExec)] -> a
 
 runPrep :: [IO (Maybe PostExec)] -> IO [IO ()]
 runPrep = fmap catMaybes . sequence
 
 -- Return an event the user can wait on for a kernel to finish.
-instance KernelArgsAsync (IO CLAsync) where
+instance KernelArgsAsync (IO IOAsync) where
   setArg s k _ (Just n) blockers prep = do
     cleanup <- runPrep prep
-    waitCLAsyncs blockers
+    waitIOAsyncs blockers
     exec <- clEnqueueNDRangeKernel (clQueue s) k (workItemsList n) [] []
-    return $ CLAsync exec cleanup
+    return $ IOAsync exec cleanup
   setArg _ _ _ Nothing _ _ = error "The number of work items is missing!"
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
@@ -62,12 +62,12 @@ instance KernelArgsAsync r => KernelArgsAsync (NumWorkItems -> r) where
 
 -- |Simple interface for asynchronously running an OpenCL
 -- kernel. Supports input 'Vector' and 'Storable' arguments. Outputs a
--- 'CLAsync' the user must wait on before inspecting output buffers.
+-- 'IOAsync' the user must wait on before inspecting output buffers.
 --
 -- > (getV, bufOut) <- initOutputVector cluState [] 4
 -- > ev <- runKernelAsync cluState kernel [] vIn bufOut (Work1D 4)
 -- > doOtherThings
--- > waitCLAsync ev
+-- > waitIOAsync ev
 -- > vOut <- getV
-runKernelAsync :: KernelArgsAsync a => OpenCLState -> CLKernel -> [CLAsync] -> a
+runKernelAsync :: KernelArgsAsync a => OpenCLState -> CLKernel -> [IOAsync] -> a
 runKernelAsync s k blockers = setArg s k 0 Nothing blockers []

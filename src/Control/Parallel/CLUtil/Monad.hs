@@ -1,7 +1,7 @@
 -- | A convenient monadic interface for working with OpenCL.
 module Control.Parallel.CLUtil.Monad (
     -- * The CL Monad
-    CL, runCL, runCL', releaseObject, throwError,
+    CL, runCL, runCL', releaseObject, throwError, liftIO,
     -- * Kernels
     getKernel, KernelArgsCL, runKernelCL,
     -- * Buffer Objects
@@ -12,7 +12,10 @@ module Control.Parallel.CLUtil.Monad (
     NumChan(..), CLImage1, CLImage2, CLImage3, CLImage4,
     -- * Buffer-Image Interoperation
     copyBufferToImage, copyBufferToImageAsync,
-    copyImageToBuffer, copyImageToBufferAsync
+    copyImageToBuffer, copyImageToBufferAsync,
+    -- * Asynchonous Computations
+    CLAsync, waitAll, waitAll_, waitAll', waitOne, readImageAsync', readImageAsync,
+    writeImageAsync, readBufferAsync, readBufferAsync', writeBufferAsync
   ) where
 
 import Control.Parallel.CLUtil.Monad.CL
@@ -21,3 +24,4 @@ import Control.Parallel.CLUtil.Monad.Image
 import Control.Parallel.CLUtil.Monad.KernelArgsCL
 import Control.Parallel.CLUtil.Monad.ProgramCache
 import Control.Parallel.CLUtil.Monad.BufferImageInterop
+import Control.Parallel.CLUtil.Monad.Async

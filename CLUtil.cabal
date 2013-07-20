@@ -1,5 +1,5 @@
 Name:                CLUtil
-Version:             0.4.1
+Version:             0.5
 Synopsis:            A thin abstraction layer over the OpenCL library.
 Description:         Medium level abstractions for working with OpenCL. OpenCL kernels are still written in the OpenCL language, but interfacing with Haskell types is simplified and the most common uses are streamlined.
 Homepage:            http://github.com/acowley/CLUtil
@@ -30,6 +30,7 @@ Library
                        Control.Parallel.CLUtil.Monad.KernelArgsCL,
                        Control.Parallel.CLUtil.Monad.ProgramCache,
                        Control.Parallel.CLUtil.Monad.BufferImageInterop,
+                       Control.Parallel.CLUtil.Monad.Async,
                        Control.Parallel.CLUtil.State,
                        Control.Parallel.CLUtil.VectorBuffers,
                        Control.Parallel.CLUtil.KernelArgTypes

@@ -15,7 +15,7 @@ module Control.Parallel.CLUtil (
   module Control.Parallel.CLUtil.VectorBuffers,
   -- * Working with asynchronous kernels
   initOutputBuffer,
-  CLAsync(..), waitCLAsync, waitCLAsyncs,
+  IOAsync(..), waitIOAsync, waitIOAsyncs,
   -- * Re-exports for convenience
   module Control.Parallel.OpenCL, Vector, CInt, CFloat
   ) where

@@ -44,20 +44,20 @@ localWord32 = Local
 
 -- |Wraps a 'CLEvent' and a list of cleanup actions to support
 -- asynchronous kernel executions.
-data CLAsync = CLAsync { asyncEvent :: CLEvent
+data IOAsync = IOAsync { asyncEvent :: CLEvent
                        , cleanupActions :: [IO ()] }
 
 -- |Wait for an asynchronous operation to complete, then cleanup
 -- associated resources.
-waitCLAsync :: CLAsync -> IO ()
-waitCLAsync (CLAsync ev cleanup) = clWaitForEvents [ev] >>
+waitIOAsync :: IOAsync -> IO ()
+waitIOAsync (IOAsync ev cleanup) = clWaitForEvents [ev] >>
                                    clReleaseEvent ev >>
                                    sequence_ cleanup
 
 -- |Wait for a list of asynchronous operations to complete, then
 -- cleanup associated resources.
-waitCLAsyncs :: [CLAsync] -> IO ()
-waitCLAsyncs asyncs = do _ <- clWaitForEvents evs
+waitIOAsyncs :: [IOAsync] -> IO ()
+waitIOAsyncs asyncs = do _ <- clWaitForEvents evs
                          mapM_ clReleaseEvent evs
                          sequence_ $ concatMap cleanupActions asyncs
   where evs = map asyncEvent asyncs

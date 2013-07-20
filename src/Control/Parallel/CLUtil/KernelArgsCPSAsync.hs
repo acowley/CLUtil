@@ -35,15 +35,15 @@ type PrepExec a = PrepCont a -> IO (a, [PostExec])
 
 -- | A class for running kernels asynchronously. This class does not
 -- have instances for returning 'Vector' values. The only possibile
--- return value is a 'CLAsync' that the user can wait on before
+-- return value is a 'IOAsync' that the user can wait on before
 -- reading back results. Input 'Vector's are not copied when a kernel
 -- is run on the CPU.
 class KernelArgsCPSAsync a where
   -- Identical to the setArg method of the KernelArgs class with the
-  -- addition of a list of 'CLAsync' events to wait on before
+  -- addition of a list of 'IOAsync' events to wait on before
   -- executing the kernel.
   setArg :: OpenCLState -> CLKernel -> CLuint -> Maybe NumWorkItems ->
-            [CLAsync] -> (forall b. [PrepExec b]) -> a
+            [IOAsync] -> (forall b. [PrepExec b]) -> a
 
 -- Nest a stack of buffer preparation actions. This lets us directly
 -- access the pointers underlying 'Vector' arguments without an extra
@@ -67,7 +67,7 @@ runCPS s k n prep = second partitionPost <$> nestM runK prep
 -- usage is a bug, so we don't expose this instance.
 instance KernelArgsCPSAsync (IO ()) where
   setArg s k _ (Just n) blockers prep = do
-    waitCLAsyncs blockers
+    waitIOAsyncs blockers
     (exec, (o,cleanup)) <- runCPS s k n prep
     when (not $ null o) 
          (error "Automatic outputs not supported for async kernels!")
@@ -78,14 +78,14 @@ instance KernelArgsCPSAsync (IO ()) where
 -}
 
 -- Return an event the user can wait on for a kernel to finish.
-instance KernelArgsCPSAsync (IO CLAsync) where
+instance KernelArgsCPSAsync (IO IOAsync) where
   setArg s k _ (Just n) blockers prep = do
     let q = clQueue s
-    waitCLAsyncs blockers
+    waitIOAsyncs blockers
     (exec, (o,cleanup)) <- runCPS s k n prep
     when (not $ null o) 
          (error "Automatic outputs not supported for async kernels!")
-    return $ CLAsync exec cleanup
+    return $ IOAsync exec cleanup
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsCPSAsync r) => KernelArgsCPSAsync (a -> r) where
@@ -117,7 +117,7 @@ instance KernelArgsCPSAsync r => KernelArgsCPSAsync (NumWorkItems -> r) where
 -- 
 -- > ev <- unsafeRunKernelCPSAsync cluState kernel []
 -- > doOtherThings
--- > waitCLAsync ev
+-- > waitIOAsync ev
 unsafeRunKernelCPSAsync :: KernelArgsCPSAsync a => 
-                           OpenCLState -> CLKernel -> [CLAsync] -> a
+                           OpenCLState -> CLKernel -> [IOAsync] -> a
 unsafeRunKernelCPSAsync s k blockers = setArg s k 0 Nothing blockers []
