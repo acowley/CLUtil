@@ -1,10 +1,12 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, KindSignatures, PolyKinds, 
-             ScopedTypeVariables #-}
+             ScopedTypeVariables, 
+             GeneralizedNewtypeDeriving, EmptyDataDecls #-}
 -- | Typed monadic interface for working with OpenCL images.
 module Control.Parallel.CLUtil.Monad.Image (
   -- * Image types
   CLImage(..), NumChan(..), CLImage1, CLImage2, CLImage3, CLImage4,
-  ChanSize(..),
+  ChanSize(..), 
+  HalfFloat, NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
 
   -- * Creating images
   allocImage, allocImage', initImage, initImage',
@@ -29,6 +31,35 @@ import Control.Parallel.CLUtil.Monad.Async
 
 -- | The number of channels for image types.
 data NumChan = OneChan | TwoChan | ThreeChan | FourChan
+
+-- | An uninhabited type that corresponds to OpenCL's @CL_HALF_FLOAT@
+-- type.
+data HalfFloat
+
+-- | A type corresponding to OpenCL's normalized signed 8-bit
+-- integer. Values of this type are represented in Haskell as 'Int8',
+-- but in an OpenCL kernel will take on values between zero and one.
+newtype NormInt8 = NormInt8 Int8
+  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+
+-- | A type corresponding to OpenCL's normalized unsigned 8-bit
+-- integer. Values of this type are represented in Haskell as 'Word8',
+-- but in an OpenCL kernel will take on values between zero and one.
+newtype NormWord8 = NormWord8 Word8
+  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+
+-- | A type corresponding to OpenCL's normalized signed 16-bit
+-- integer. Values of this type are represented in Haskell as 'Int16',
+-- but in an OpenCL kernel will take on values between zero and one.
+newtype NormInt16 = NormInt16 Int16
+  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+
+-- | A type corresponding to OpenCL's normalized unsigned 16-bit
+-- integer. Values of this type are represented in Haskell as
+-- 'Word16', but in an OpenCL kernel will take on values between zero
+-- and one.
+newtype NormWord16 = NormWord16 Word16
+  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
 
 -- |A @CLImage n a@ is an image with @n@ channels whose every
 -- component is of type @a@.
@@ -120,6 +151,21 @@ instance TypeCompatible Float where
 instance TypeCompatible CFloat where
   typeCompatible _ = CL_FLOAT
 
+instance TypeCompatible HalfFloat where
+  typeCompatible _ = CL_HALF_FLOAT
+
+instance TypeCompatible NormInt8 where
+  typeCompatible _ = CL_SNORM_INT8
+
+instance TypeCompatible NormWord8 where
+  typeCompatible _ = CL_UNORM_INT8
+
+instance TypeCompatible NormInt16 where
+  typeCompatible _ = CL_SNORM_INT16
+
+instance TypeCompatible NormWord16 where
+  typeCompatible _ = CL_UNORM_INT16
+
 -- | A mapping from 'NumChan' variants used as types to value-level
 -- integers.
 class ChanSize (a::NumChan) where
@@ -161,7 +207,7 @@ imageCompatible (CLImageFormat order dtype) _
   | otherwise = return ()
 
 -- | Common constraint for 'CLImage' type parameters.
-type ValidImage n b = (ChanCompatible n,ChanSize n,Storable b,TypeCompatible b)
+type ValidImage n b = (ChanCompatible n, ChanSize n, TypeCompatible b)
 
 -- | Allocate a new 2D or 3D image of the given dimensions.
 allocImage' :: forall a f n b.
@@ -214,7 +260,7 @@ initImage' flags fmt dims v =
 -- type. See 'initImage'' for more information on requirements of the
 -- input 'Vector'.
 initImage :: forall f a n b.
-             (Integral a, Foldable f, Functor f, ValidImage n b)
+             (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
           => [CLMemFlag] -> f a -> Vector b -> CL (CLImage n b)
 initImage flags = initImage' flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))

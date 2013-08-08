@@ -9,7 +9,9 @@ module Control.Parallel.CLUtil.Monad (
     -- * Image Objects
     CLImage(..), allocImage, allocImage', initImage, initImage',
     readImage, readImage', writeImage,
-    NumChan(..), CLImage1, CLImage2, CLImage3, CLImage4,
+    NumChan(..), HalfFloat, 
+    NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
+    CLImage1, CLImage2, CLImage3, CLImage4,
     -- * Buffer-Image Interoperation
     copyBufferToImage, copyBufferToImageAsync,
     copyImageToBuffer, copyImageToBufferAsync,
