@@ -5,7 +5,7 @@
 module Control.Parallel.CLUtil.Monad.Image (
   -- * Image types
   CLImage(..), NumChan(..), CLImage1, CLImage2, CLImage3, CLImage4,
-  ChanSize(..), 
+  ChanSize(..), ChanCompatible(..), ValidImage,
   HalfFloat, NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
 
   -- * Creating images
@@ -20,6 +20,7 @@ import Control.Monad (when)
 import Data.Foldable (Foldable)
 import qualified Data.Foldable as F
 import Data.Int (Int8, Int16, Int32)
+import Data.Proxy (Proxy(..))
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Data.Word (Word8, Word16, Word32)
@@ -82,7 +83,7 @@ type CLImage3 = CLImage ThreeChan
 type CLImage4 = CLImage FourChan
 
 -- Kind-polymorphic proxy to pass types around.
-data Proxy a = Proxy
+-- data Proxy a = Proxy
 
 -- | Predicate to determine if a 'NumChan' is compatible with a
 -- 'CLChannelOrder'. 'NumChan' says nothing about the semantics of the

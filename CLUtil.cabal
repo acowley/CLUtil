@@ -1,5 +1,5 @@
 Name:                CLUtil
-Version:             0.5
+Version:             0.5.1
 Synopsis:            A thin abstraction layer over the OpenCL library.
 Description:         Medium level abstractions for working with OpenCL. OpenCL kernels are still written in the OpenCL language, but interfacing with Haskell types is simplified and the most common uses are streamlined.
 Homepage:            http://github.com/acowley/CLUtil
@@ -39,7 +39,9 @@ Library
                        bytestring,
                        containers,
                        mtl,
+                       tagged >= 0.6.1,
                        transformers >= 0.3,
                        vector >= 0.7,
                        OpenCL >= 1.0.3
+
                        

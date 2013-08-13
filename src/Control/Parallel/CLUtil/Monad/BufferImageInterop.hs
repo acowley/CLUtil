@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables, TupleSections #-}
+{-# LANGUAGE TupleSections #-}
 -- | Utilities for working with 'CLBuffer's and 'CLImage's together.
 module Control.Parallel.CLUtil.Monad.BufferImageInterop where
 import Control.Parallel.CLUtil.State (clQueue)
@@ -12,7 +12,7 @@ import Control.Parallel.OpenCL
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Returns a
 -- 'CLEvent' that may be waited upon for the copy operation to finish.
-copyBufferToImageAsync :: forall a. CLBuffer a -> CLImage1 a -> CL (CLAsync ())
+copyBufferToImageAsync :: CLBuffer a -> CLImage1 b -> CL (CLAsync ())
 copyBufferToImageAsync (CLBuffer bufLen bufObj) (CLImage imgDims imgObj)
   | bufLen /= dimProd = throwError "Buffer is not the same size as image"
   | otherwise = (, return ()) `fmap`
@@ -24,14 +24,14 @@ copyBufferToImageAsync (CLBuffer bufLen bufObj) (CLImage imgDims imgObj)
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Blocks until the
 -- copy operation is complete.
-copyBufferToImage :: CLBuffer a -> CLImage1 a -> CL ()
+copyBufferToImage :: CLBuffer a -> CLImage1 b -> CL ()
 copyBufferToImage buf img = copyBufferToImageAsync buf img >>= waitOne
 
 -- | Copy the contents of a 'CLImage' to a 'CLBuffer' of the same
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Returns a
 -- 'CLEvent' that may be waited upon for the copy operation to finish.
-copyImageToBufferAsync :: forall a. CLImage1 a -> CLBuffer a -> CL (CLAsync ())
+copyImageToBufferAsync :: CLImage1 a -> CLBuffer a -> CL (CLAsync ())
 copyImageToBufferAsync (CLImage imgDims imgObj) (CLBuffer bufLen bufObj)
   | dimProd /= bufLen = throwError "Buffer is not the same size as image"
   | otherwise = (, return ()) `fmap`
@@ -43,5 +43,5 @@ copyImageToBufferAsync (CLImage imgDims imgObj) (CLBuffer bufLen bufObj)
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Blocks until the
 -- copy operation is complete.
-copyImageToBuffer :: forall a. CLImage1 a -> CLBuffer a -> CL ()
-copyImageToBuffer img buf =copyImageToBufferAsync img buf >>= waitOne
+copyImageToBuffer :: CLImage1 a -> CLBuffer a -> CL ()
+copyImageToBuffer img buf = copyImageToBufferAsync img buf >>= waitOne
