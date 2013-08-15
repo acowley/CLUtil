@@ -3,7 +3,7 @@ module Control.Parallel.CLUtil.Monad (
     -- * The CL Monad
     CL, runCL, runCL', releaseObject, throwError, liftIO,
     -- * Kernels
-    getKernel, KernelArgsCL, runKernelCL,
+    getKernel, KernelArgsCL, runKernelCL, runKernelCLAsync,
     -- * Buffer Objects
     CLBuffer(..), allocBuffer, initBuffer, readBuffer, readBuffer', writeBuffer,
     -- * Image Objects
@@ -24,6 +24,7 @@ import Control.Parallel.CLUtil.Monad.CL
 import Control.Parallel.CLUtil.Monad.Buffer
 import Control.Parallel.CLUtil.Monad.Image
 import Control.Parallel.CLUtil.Monad.KernelArgsCL
+import Control.Parallel.CLUtil.Monad.KernelArgsCLAsync (runKernelCLAsync)
 import Control.Parallel.CLUtil.Monad.ProgramCache
 import Control.Parallel.CLUtil.Monad.BufferImageInterop
 import Control.Parallel.CLUtil.Monad.Async
