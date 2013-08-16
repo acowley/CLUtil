@@ -16,7 +16,8 @@ module Control.Parallel.CLUtil.Monad (
     copyBufferToImage, copyBufferToImageAsync,
     copyImageToBuffer, copyImageToBufferAsync,
     -- * Asynchonous Computations
-    CLAsync, waitAll, waitAll_, waitAll', waitOne, readImageAsync', readImageAsync,
+    CLAsync, waitAll, waitAll_, waitAll', waitAllUnit, waitOne,
+    readImageAsync', readImageAsync,
     writeImageAsync, readBufferAsync, readBufferAsync', writeBufferAsync
   ) where
 

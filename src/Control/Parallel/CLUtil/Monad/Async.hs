@@ -8,7 +8,8 @@
 -- of differing types, then we can make use of a heterogenous list to
 -- accumulate these promised results and to represent the results.
 module Control.Parallel.CLUtil.Monad.Async 
-  (HList(..), (<+>), (++), waitAll, waitAll', waitAll_, waitOne, CLAsync) where
+  (HList(..), (<+>), (++), 
+   waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync) where
 import Control.Applicative
 import Control.Parallel.OpenCL
 import Control.Parallel.CLUtil.Monad.CL
@@ -39,6 +40,13 @@ waitAll_ = aux . unzip
   where aux (evs,xs) = do okay "Waiting for events" $ clWaitForEvents evs
                           mapM_ (okay "Releasing event" . clReleaseEvent) evs
                           sequence_ xs
+
+-- | Block until all the given 'CL' actions have finished. All actions
+-- are being run solely for their side effects. This specialization of
+-- 'waitAll_' is intended to help type inference determine the result
+-- of kernel invocations.
+waitAllUnit :: [CLAsync ()] -> CL ()
+waitAllUnit = waitAll_
 
 -- | Block on a single asynchronous computation.
 waitOne :: CLAsync a -> CL a
