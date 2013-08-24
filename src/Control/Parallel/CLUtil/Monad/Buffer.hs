@@ -6,7 +6,7 @@ import Control.Monad (when)
 import Control.Parallel.CLUtil
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
-import Foreign.Ptr (castPtr, nullPtr)
+import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
 
 import Control.Parallel.CLUtil.Monad.CL
