@@ -36,7 +36,7 @@ Library
                        Control.Parallel.CLUtil.VectorBuffers,
                        Control.Parallel.CLUtil.KernelArgTypes
   HS-Source-Dirs:      src
-  Build-depends:       base >= 4.2,
+  Build-depends:       base >= 4.6,
                        bytestring,
                        containers,
                        mtl,
