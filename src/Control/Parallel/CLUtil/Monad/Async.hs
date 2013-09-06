@@ -29,9 +29,11 @@ type CLAsync a = (CLEvent, CL a)
 -- action must produce the same type of value.
 waitAll :: [CLAsync a] -> CL [a]
 waitAll = aux . unzip
-  where aux (evs,xs) = do okay "Waiting for events" $ clWaitForEvents evs
-                          mapM_ (okay "Releasing event" . clReleaseEvent) evs
-                          sequence xs
+  where aux (evs,xs) = 
+          do liftIO $ clWaitForEvents evs >> mapM_ clReleaseEvent evs
+             -- okay "Waiting for events" $ clWaitForEvents evs
+             -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
+             sequence xs
 
 -- | Block until the results of all given 'CL' actions are ready, then
 -- discard all of those results.

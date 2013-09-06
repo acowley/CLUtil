@@ -9,7 +9,8 @@ module Control.Parallel.CLUtil.Monad.Image (
   HalfFloat, NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
 
   -- * Creating images
-  allocImage, allocImage', initImage, initImage',
+  allocImage, allocImage_, allocImageFmt, allocImageFmt_,
+  initImage, initImage_, initImageFmt, initImageFmt_,
 
   -- * Working with images
   readImage', readImage, readImageAsync', readImageAsync, 
@@ -210,11 +211,12 @@ imageCompatible (CLImageFormat order dtype) _
 -- | Common constraint for 'CLImage' type parameters.
 type ValidImage n b = (ChanCompatible n, ChanSize n, TypeCompatible b)
 
--- | Allocate a new 2D or 3D image of the given dimensions.
-allocImage' :: forall a f n b.
-               (Integral a, Foldable f, Functor f, ValidImage n b)
-            => [CLMemFlag] -> CLImageFormat -> f a -> CL (CLImage n b)
-allocImage' flags fmt dims =
+-- | Allocate a new 2D or 3D image of the given dimensions and
+-- format. The image is /not/ registered for cleanup.
+allocImageFmt_ :: forall a f n b.
+                (Integral a, Foldable f, Functor f, ValidImage n b)
+             => [CLMemFlag] -> CLImageFormat -> f a -> CL (CLImage n b)
+allocImageFmt_ flags fmt dims =
   do imageCompatible fmt (Proxy::Proxy (CLImage n b))
      c <- clContext <$> ask
      case F.toList (fromIntegral <$> dims) of
@@ -224,27 +226,49 @@ allocImage' flags fmt dims =
                     clCreateImage3D c flags fmt w h d 0 0 nullPtr
        _       -> throwError "Only 2D and 3D images are currently supported!"
 
+-- | Allocate a new 2D or 3D image of the given dimensions and
+-- format. The image is registered for cleanup.
+allocImageFmt :: (Integral a, Functor f, Foldable f, ValidImage n b)
+            => [CLMemFlag] -> CLImageFormat -> f a -> CL (CLImage n b)
+allocImageFmt flags fmt dims = do img <- allocImageFmt_ flags fmt dims
+                                  registerCleanup $ releaseObject img
+                                  return img
+
 -- | Allocate a new 2D or 3D image of the given dimensions. The image
 -- format is the default for the the return type (e.g. the type
 -- 'CLImage OneChan Float' is associated with a default format of
--- 'CLImageFormat CL_R CL_FLOAT') .
+-- 'CLImageFormat CL_R CL_FLOAT') . The image is registered for
+-- cleanup.
 allocImage :: forall f a n b. 
               (Integral a, Foldable f, Functor f, ValidImage n b)
            => [CLMemFlag] -> f a -> CL (CLImage n b)
-allocImage flags = allocImage' flags fmt
+allocImage flags = allocImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
+-- | Allocate a new 2D or 3D image of the given dimensions. The image
+-- format is the default for the the return type (e.g. the type
+-- 'CLImage OneChan Float' is associated with a default format of
+-- 'CLImageFormat CL_R CL_FLOAT'). The image is /not/ registered for
+-- cleanup.
+allocImage_ :: forall f a n b. 
+               (Integral a, Foldable f, Functor f, ValidImage n b)
+            => [CLMemFlag] -> f a -> CL (CLImage n b)
+allocImage_ flags = allocImageFmt_ flags fmt
+  where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
 
 -- | Initialize a new 2D or 3D image of the given dimensions with a
 -- 'Vector' of pixel data. Note that the pixel data is /flattened/
 -- across however many channels each pixel may represent. For example,
 -- if we have a three channel RGB image with a data type of 'Float',
 -- then we expect a 'Vector Float' with a number of elements equal to
--- 3 times the number of pixels.
-initImage' :: forall a f n b.
-              (Integral a, Foldable f, Functor f, Storable b, ValidImage n b)
-           => [CLMemFlag] -> CLImageFormat -> f a -> Vector b
-           -> CL (CLImage n b)
-initImage' flags fmt dims v =
+-- 3 times the number of pixels. The image is /not/ registered for
+-- cleanup.
+initImageFmt_ :: forall a f n b.
+                 (Integral a, Foldable f, Functor f, Storable b, ValidImage n b)
+               => [CLMemFlag] -> CLImageFormat -> f a -> Vector b
+               -> CL (CLImage n b)
+initImageFmt_ flags fmt dims v =
   do imageCompatible fmt (Proxy::Proxy (CLImage n b))
      when (V.length v /= fromIntegral (F.product dims)*numChan (Proxy::Proxy n))
           (throwError "Vector is not the same size as the desired image")
@@ -256,15 +280,33 @@ initImage' flags fmt dims v =
                     clCreateImage3D c flags fmt w h d 0 0 . castPtr
        _       -> throwError "Only 2D and 3D images are currently supported!"
 
+-- | Like 'initImageFmt_', but the image is registered for cleanup.
+initImageFmt :: (Integral a, Functor f, Foldable f, Storable b, ValidImage n b)
+             => [CLMemFlag] -> CLImageFormat -> f a -> Vector b -> CL (CLImage n b)
+initImageFmt flags fmt dims v = do img <- initImageFmt_ flags fmt dims v
+                                   registerCleanup $ releaseObject img
+                                   return img
+
 -- | Initialize an image of the given dimensions with the a 'Vector'
 -- of pixel data. A default image format is deduced from the return
 -- type. See 'initImage'' for more information on requirements of the
--- input 'Vector'.
+-- input 'Vector'. The image is registered for cleanup.
 initImage :: forall f a n b.
              (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
           => [CLMemFlag] -> f a -> Vector b -> CL (CLImage n b)
-initImage flags = initImage' flags fmt
+initImage flags = initImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
+-- | Initialize an image of the given dimensions with the a 'Vector'
+-- of pixel data. A default image format is deduced from the return
+-- type. See 'initImage'' for more information on requirements of the
+-- input 'Vector'. The image is /not/ registered for cleanup.
+initImage_ :: forall f a n b.
+              (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
+           => [CLMemFlag] -> f a -> Vector b -> CL (CLImage n b)
+initImage_ flags = initImageFmt_ flags fmt
+  where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
 
 -- | Write a 'Vector''s contents to a 2D or 3D image. The 'Vector'
 -- must be the same size as the target image. NOTE: Multi-dimensional

@@ -31,21 +31,36 @@ instance Storable (CLBuffer a) where
 instance CLReleasable (CLBuffer a) where
   releaseObject (CLBuffer _ m) = clReleaseMemObject m
 
--- | Allocate a new buffer object of the given number of elements.
-allocBuffer :: forall a. Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)
-allocBuffer flags n = 
+-- | Allocate a new buffer object of the given number of elements. The
+-- buffer is /not/ registered for cleanup.
+allocBuffer_ :: forall a. Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)
+allocBuffer_ flags n = 
   do s <- ask
      fmap (CLBuffer n) . liftIO $ initOutputBuffer s flags numBytes
   where numBytes = n * sizeOf (undefined::a)
 
+-- | Allocate a new buffer object of the given number of elements. The
+-- buffer is registered for cleanup.
+allocBuffer :: Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)
+allocBuffer flags n = do b <- allocBuffer_ flags n
+                         registerCleanup $ releaseObject b
+                         return b
+
 -- | Allocate a new buffer object and write a 'Vector''s contents to
--- it.
-initBuffer :: forall a. Storable a => [CLMemFlag] -> Vector a -> CL (CLBuffer a)
-initBuffer flags v = 
+-- it. The buffer is /not/ registered for cleanup.
+initBuffer_ :: forall a. Storable a => [CLMemFlag] -> Vector a -> CL (CLBuffer a)
+initBuffer_ flags v = 
   do c <- clContext <$> ask
      fmap (CLBuffer (V.length v)) . liftIO . V.unsafeWith v $
        clCreateBuffer c flags . (sz,) . castPtr
   where sz = V.length v * sizeOf (undefined::a)
+
+-- | Allocate a new buffer object and write a 'Vector''s contents to
+-- it. The buffer is registered for cleanup.
+initBuffer :: Storable a => [CLMemFlag] -> Vector a -> CL (CLBuffer a)
+initBuffer flags v = do b <- initBuffer_ flags v
+                        registerCleanup $ releaseObject b
+                        return b
 
 -- | @readBuffer' mem n events@ reads back a 'Vector' of @n@ elements
 -- from the buffer object @mem@ after waiting for @events@ to finish.
