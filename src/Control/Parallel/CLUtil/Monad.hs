@@ -1,13 +1,16 @@
 -- | A convenient monadic interface for working with OpenCL.
 module Control.Parallel.CLUtil.Monad (
     -- * The CL Monad
-    CL, runCL, runCL', releaseObject, throwError, liftIO,
+    CL, runCL, runCL', runCLError, releaseObject, throwError, liftIO,
+    registerCleanup, Cleanup(runCleanup),
     -- * Kernels
     getKernel, KernelArgsCL, runKernelCL, runKernelCLAsync,
     -- * Buffer Objects
-    CLBuffer(..), allocBuffer, initBuffer, readBuffer, readBuffer', writeBuffer,
+    CLBuffer(..), allocBuffer, allocBuffer_, initBuffer, initBuffer_,
+    readBuffer, readBuffer', writeBuffer,
     -- * Image Objects
-    CLImage(..), allocImage, allocImage', initImage, initImage',
+    CLImage(..), allocImage, allocImageFmt, allocImage_, allocImageFmt_,
+    initImage, initImage_, initImageFmt, initImageFmt_,
     readImage, readImage', writeImage,
     NumChan(..), HalfFloat, 
     NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
