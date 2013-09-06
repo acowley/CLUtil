@@ -46,7 +46,7 @@ type CL = RWST OpenCLState Cleanup Cache (ErrorT String IO)
 
 -- | Register a cleanup action. NOTE: The return value of the supplied
 -- action is discarded. A composite cleanup action is returned by
--- calls to 'runCL' or 'runCL''.
+-- calls to 'runCL' or 'runCLError'.
 registerCleanup :: IO a -> CL ()
 registerCleanup = MTL.tell . Cleanup . (() <$)
 
