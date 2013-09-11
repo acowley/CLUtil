@@ -39,8 +39,10 @@ waitAll = aux . unzip
 -- discard all of those results.
 waitAll_ :: [CLAsync a] -> CL ()
 waitAll_ = aux . unzip
-  where aux (evs,xs) = do okay "Waiting for events" $ clWaitForEvents evs
-                          mapM_ (okay "Releasing event" . clReleaseEvent) evs
+  where aux (evs,xs) = do liftIO $ do clWaitForEvents evs
+                                      mapM_ clReleaseEvent evs
+                          -- okay "Waiting for events" $ clWaitForEvents evs
+                          -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
                           sequence_ xs
 
 -- | Block until all the given 'CL' actions have finished. All actions
@@ -94,7 +96,8 @@ instance SequenceH m ts => SequenceH m ((e, m a) ': ts) where
 -- action may produce a different type of value.
 waitAll' :: (SequenceH CL xs, HasEvents xs)
          => HList xs -> CL (HList (Sequence (MapSnd xs)))
-waitAll' xs = do okay "Waiting for events" $ clWaitForEvents evs
-                 mapM_ (okay "Releasing event" . clReleaseEvent) evs
+waitAll' xs = do liftIO $ clWaitForEvents evs >> mapM_ clReleaseEvent evs
+                 -- okay "Waiting for events" $ clWaitForEvents evs
+                 -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
                  sequenceH xs
   where evs = filter (/= nullPtr) $ getEvents xs
