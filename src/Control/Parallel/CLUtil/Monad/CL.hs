@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 -- | A monad transformer stack for working with OpenCL.
 module Control.Parallel.CLUtil.Monad.CL 
-  (CL, runCL, runCL', runCLError, CLReleasable(..),
+  (CL, runCL, runCL', runCLIO, runCLError, CLReleasable(..),
    ask, throwError, liftIO, okay, registerCleanup, Cleanup(..),
   ) where
 import Control.Applicative
@@ -54,6 +54,15 @@ registerCleanup = MTL.tell . Cleanup . (() <$)
 -- raised by calling 'error'.
 runCL :: OpenCLState -> CL a -> IO (a, Cleanup)
 runCL s m = runErrorT (evalRWST m s emptyCache) >>= either error return
+
+-- | Run a 'CL' action with a given 'OpenCLState'. Any errors are
+-- raised by calling 'error'. This function behaves identically to
+-- 'runCL' with the exception that the 'Cleanup' action is returned as
+-- an unadorned 'IO' action. This may help isolate callers from any
+-- awareness of OpenCL, but makes the types a bit more ambiguous.
+runCLIO :: OpenCLState -> CL a -> IO (a, IO ())
+runCLIO s m = aux <$> runCL s m
+  where aux (r,c) = (r, runCleanup c)
 
 -- | Run a 'CL' action that discards any accumulated cleanup action.
 runCL' :: OpenCLState -> CL a -> IO a

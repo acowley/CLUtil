@@ -1,7 +1,7 @@
 -- | A convenient monadic interface for working with OpenCL.
 module Control.Parallel.CLUtil.Monad (
     -- * The CL Monad
-    CL, runCL, runCL', runCLError, releaseObject, throwError, liftIO,
+    CL, runCL, runCL', runCLIO, runCLError, releaseObject, throwError, liftIO,
     registerCleanup, Cleanup(runCleanup),
     -- * Kernels
     getKernel, KernelArgsCL, runKernelCL, runKernelCLAsync,
