@@ -8,7 +8,7 @@
 -- of differing types, then we can make use of a heterogenous list to
 -- accumulate these promised results and to represent the results.
 module Control.Parallel.CLUtil.Monad.Async 
-  (HList(..), (<+>), (++), 
+  (HList(..), (<+>), (++), (&:), singAsync,
    waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync) where
 import Control.Applicative
 import Control.Parallel.OpenCL
@@ -24,6 +24,16 @@ infixr 5 :&
 -- | A 'CLEvent' that will fire when the result of an associated 'CL'
 -- computation is ready.
 type CLAsync a = (CLEvent, CL a)
+
+-- | Helper for lifting 'HList''s cons operation into an
+-- 'Applicative'.
+(&:) :: Applicative m => m a -> m (HList bs) -> m (HList (a ': bs))
+x &: xs = (:&) <$> x <*> xs
+infixr 5 &:
+
+-- | Helper for producing a single-element 'HList' from a 'CLAsync'.
+singAsync :: CL (CLAsync a) -> CL (HList '[(CLEvent, CL a)])
+singAsync e = (:&) <$> e <*> pure HNil
 
 -- | Block until the results of all given 'CL' actions are ready. Each
 -- action must produce the same type of value.
