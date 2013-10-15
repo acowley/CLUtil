@@ -1,16 +1,21 @@
 {-# LANGUAGE ScopedTypeVariables, TupleSections #-}
 -- | Typed monadic interface for working with OpenCL buffers.
-module Control.Parallel.CLUtil.Monad.Buffer where
-import Control.Applicative ((<$>))
+module Control.Parallel.CLUtil.Buffer where
+import Control.Applicative ((<$>), (<$))
 import Control.Monad (when)
-import Control.Parallel.CLUtil
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
-import Foreign.Ptr (castPtr)
+import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
 
-import Control.Parallel.CLUtil.Monad.CL
-import Control.Parallel.CLUtil.Monad.Async
+import Control.Parallel.CLUtil.Async
+import Control.Parallel.CLUtil.CL
+import Control.Parallel.CLUtil.State (OpenCLState(clContext, clQueue))
+import Control.Parallel.OpenCL
+
+-- |Allocate a raw buffer whose contents are undefined.
+initOutputBuffer :: Integral a => OpenCLState -> [CLMemFlag] -> a -> IO CLMem
+initOutputBuffer s flags n = clCreateBuffer (clContext s) flags (n, nullPtr)
 
 -- |A @CLBuffer a@ is a buffer object whose elements are of type
 -- @a@. It is the caller's responsibility that the given type must
@@ -41,14 +46,15 @@ allocBuffer_ flags n =
 
 -- | Allocate a new buffer object of the given number of elements. The
 -- buffer is registered for cleanup.
-allocBuffer :: Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)
+allocBuffer :: Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a, ReleaseKey)
 allocBuffer flags n = do b <- allocBuffer_ flags n
-                         registerCleanup $ releaseObject b
-                         return b
+                         k <- registerCleanup $ () <$ releaseObject b
+                         return (b, k)
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is /not/ registered for cleanup.
-initBuffer_ :: forall a. Storable a => [CLMemFlag] -> Vector a -> CL (CLBuffer a)
+initBuffer_ :: forall a. Storable a
+            => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a)
 initBuffer_ flags v = 
   do c <- clContext <$> ask
      fmap (CLBuffer (V.length v)) . liftIO . V.unsafeWith v $
@@ -57,15 +63,16 @@ initBuffer_ flags v =
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is registered for cleanup.
-initBuffer :: Storable a => [CLMemFlag] -> Vector a -> CL (CLBuffer a)
+initBuffer :: Storable a
+           => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a, ReleaseKey)
 initBuffer flags v = do b <- initBuffer_ flags v
-                        registerCleanup $ releaseObject b
-                        return b
+                        k <- registerCleanup $ () <$ releaseObject b
+                        return (b,k)
 
 -- | @readBuffer' mem n events@ reads back a 'Vector' of @n@ elements
 -- from the buffer object @mem@ after waiting for @events@ to finish.
 readBufferAsync' :: forall a. Storable a => CLBuffer a -> Int -> [CLEvent]
-                 -> CL (CLAsync (Vector a))
+                 -> CL (CLAsync (V.Vector a))
 readBufferAsync' (CLBuffer n' mem) n waitForIt =
   do when (n > n') (throwError "Tried to read more elements than a buffer has")
      q <- clQueue <$> ask
@@ -77,21 +84,23 @@ readBufferAsync' (CLBuffer n' mem) n waitForIt =
 
 -- | @readBuffer' buf n events@ performs a blocking read of the first
 -- @n@ elements of a buffer after waiting for @events@.
-readBuffer' :: forall a. Storable a => CLBuffer a -> Int -> [CLEvent] -> CL (Vector a)
+readBuffer' :: forall a. Storable a
+            => CLBuffer a -> Int -> [CLEvent] -> CL (V.Vector a)
 readBuffer' buf n waitForIt = readBufferAsync' buf n waitForIt >>= waitOne
 
 -- | @readBuffer mem@ reads back a 'Vector' containing all the data
 -- stored in a 'CLBuffer'.
-readBuffer :: Storable a => CLBuffer a -> CL (Vector a)
+readBuffer :: Storable a => CLBuffer a -> CL (V.Vector a)
 readBuffer b@(CLBuffer n _) = readBuffer' b n []
 
 -- | Perform a non-blocking read of an buffer's entire contents.
-readBufferAsync :: Storable a => CLBuffer a -> CL (CLAsync (Vector a))
+readBufferAsync :: Storable a => CLBuffer a -> CL (CLAsync (V.Vector a))
 readBufferAsync b@(CLBuffer n _) = readBufferAsync' b n []
 
 -- | Write a 'Vector''s contents to a buffer object. This operation
 -- is non-blocking.
-writeBufferAsync :: forall a. Storable a => CLBuffer a -> Vector a -> CL (CLAsync ())
+writeBufferAsync :: forall a. Storable a
+                 => CLBuffer a -> V.Vector a -> CL (CLAsync ())
 writeBufferAsync (CLBuffer n mem) v = 
   do when (V.length v > n)
           (throwError "writeBuffer: Vector is bigger than the CLBuffer")
@@ -102,5 +111,5 @@ writeBufferAsync (CLBuffer n mem) v =
   where sz = V.length v * sizeOf (undefined::a)
 
 -- | Perform a blocking write of a 'Vector's contents to a buffer object.
-writeBuffer :: Storable a => CLBuffer a -> Vector a -> CL ()
+writeBuffer :: Storable a => CLBuffer a -> V.Vector a -> CL ()
 writeBuffer b v = writeBufferAsync b v >>= waitOne

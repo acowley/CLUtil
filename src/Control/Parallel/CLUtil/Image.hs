@@ -2,7 +2,7 @@
              ScopedTypeVariables, 
              GeneralizedNewtypeDeriving, EmptyDataDecls #-}
 -- | Typed monadic interface for working with OpenCL images.
-module Control.Parallel.CLUtil.Monad.Image (
+module Control.Parallel.CLUtil.Image (
   -- * Image types
   CLImage(..), NumChan(..), CLImage1, CLImage2, CLImage3, CLImage4,
   ChanSize(..), ChanCompatible(..), ValidImage,
@@ -16,7 +16,7 @@ module Control.Parallel.CLUtil.Monad.Image (
   readImage', readImage, readImageAsync', readImageAsync, 
   writeImage, writeImageAsync
   ) where
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<$))
 import Control.Monad (when)
 import Data.Foldable (Foldable)
 import qualified Data.Foldable as F
@@ -25,11 +25,13 @@ import Data.Proxy (Proxy(..))
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Data.Word (Word8, Word16, Word32)
+import Foreign.C.Types (CFloat, CInt)
 import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
-import Control.Parallel.CLUtil
-import Control.Parallel.CLUtil.Monad.CL
-import Control.Parallel.CLUtil.Monad.Async
+import Control.Parallel.CLUtil.Async
+import Control.Parallel.CLUtil.CL
+import Control.Parallel.CLUtil.State (clContext, clQueue)
+import Control.Parallel.OpenCL
 
 -- | The number of channels for image types.
 data NumChan = OneChan | TwoChan | ThreeChan | FourChan
@@ -229,10 +231,12 @@ allocImageFmt_ flags fmt dims =
 -- | Allocate a new 2D or 3D image of the given dimensions and
 -- format. The image is registered for cleanup.
 allocImageFmt :: (Integral a, Functor f, Foldable f, ValidImage n b)
-            => [CLMemFlag] -> CLImageFormat -> f a -> CL (CLImage n b)
-allocImageFmt flags fmt dims = do img <- allocImageFmt_ flags fmt dims
-                                  registerCleanup $ releaseObject img
-                                  return img
+            => [CLMemFlag] -> CLImageFormat -> f a
+            -> CL (CLImage n b, ReleaseKey)
+allocImageFmt flags fmt dims = 
+  do img <- allocImageFmt_ flags fmt dims
+     k <- registerCleanup $ () <$ releaseObject img
+     return (img,k)
 
 -- | Allocate a new 2D or 3D image of the given dimensions. The image
 -- format is the default for the the return type (e.g. the type
@@ -241,7 +245,7 @@ allocImageFmt flags fmt dims = do img <- allocImageFmt_ flags fmt dims
 -- cleanup.
 allocImage :: forall f a n b. 
               (Integral a, Foldable f, Functor f, ValidImage n b)
-           => [CLMemFlag] -> f a -> CL (CLImage n b)
+           => [CLMemFlag] -> f a -> CL (CLImage n b, ReleaseKey)
 allocImage flags = allocImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
 
@@ -266,7 +270,7 @@ allocImage_ flags = allocImageFmt_ flags fmt
 -- cleanup.
 initImageFmt_ :: forall a f n b.
                  (Integral a, Foldable f, Functor f, Storable b, ValidImage n b)
-               => [CLMemFlag] -> CLImageFormat -> f a -> Vector b
+               => [CLMemFlag] -> CLImageFormat -> f a -> V.Vector b
                -> CL (CLImage n b)
 initImageFmt_ flags fmt dims v =
   do imageCompatible fmt (Proxy::Proxy (CLImage n b))
@@ -282,10 +286,12 @@ initImageFmt_ flags fmt dims v =
 
 -- | Like 'initImageFmt_', but the image is registered for cleanup.
 initImageFmt :: (Integral a, Functor f, Foldable f, Storable b, ValidImage n b)
-             => [CLMemFlag] -> CLImageFormat -> f a -> Vector b -> CL (CLImage n b)
-initImageFmt flags fmt dims v = do img <- initImageFmt_ flags fmt dims v
-                                   registerCleanup $ releaseObject img
-                                   return img
+             => [CLMemFlag] -> CLImageFormat -> f a -> V.Vector b
+             -> CL (CLImage n b, ReleaseKey)
+initImageFmt flags fmt dims v =
+  do img <- initImageFmt_ flags fmt dims v
+     k <- registerCleanup $ () <$ releaseObject img
+     return (img, k)
 
 -- | Initialize an image of the given dimensions with the a 'Vector'
 -- of pixel data. A default image format is deduced from the return
@@ -293,7 +299,7 @@ initImageFmt flags fmt dims v = do img <- initImageFmt_ flags fmt dims v
 -- input 'Vector'. The image is registered for cleanup.
 initImage :: forall f a n b.
              (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
-          => [CLMemFlag] -> f a -> Vector b -> CL (CLImage n b)
+          => [CLMemFlag] -> f a -> V.Vector b -> CL (CLImage n b, ReleaseKey)
 initImage flags = initImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
 
@@ -303,10 +309,9 @@ initImage flags = initImageFmt flags fmt
 -- input 'Vector'. The image is /not/ registered for cleanup.
 initImage_ :: forall f a n b.
               (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
-           => [CLMemFlag] -> f a -> Vector b -> CL (CLImage n b)
+           => [CLMemFlag] -> f a -> V.Vector b -> CL (CLImage n b)
 initImage_ flags = initImageFmt_ flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
-
 
 -- | Write a 'Vector''s contents to a 2D or 3D image. The 'Vector'
 -- must be the same size as the target image. NOTE: Multi-dimensional
@@ -314,7 +319,7 @@ initImage_ flags = initImageFmt_ flags fmt
 -- want to upload RGBA pixels to a 2D image, you must provide a
 -- 'Vector CFloat' of length @4 * imageWidth * imageHeight@.
 writeImageAsync :: forall n a. (Storable a, ChanSize n)
-                => CLImage n a -> Vector a -> CL (CLAsync ())
+                => CLImage n a -> V.Vector a -> CL (CLAsync ())
 writeImageAsync (CLImage dims@(w,h,d) mem) v = 
   do q <- clQueue <$> ask
      when (w*h*d*numChan (Proxy::Proxy n) /= V.length v)
@@ -325,7 +330,7 @@ writeImageAsync (CLImage dims@(w,h,d) mem) v =
 
 -- | Perform a blocking write of a 'Vector''s contents to an
 -- image. See 'writeImageAsync' for more information.
-writeImage :: (Storable a, ChanSize n) => CLImage n a -> Vector a -> CL ()
+writeImage :: (Storable a, ChanSize n) => CLImage n a -> V.Vector a -> CL ()
 writeImage img v = writeImageAsync img v >>= waitOne
 
 tripZipAll :: (a -> a -> Bool) -> (a,a,a) -> (a,a,a) -> Bool
@@ -347,7 +352,7 @@ tripAll f (x,y,z) = f x && f y && f z
 -- working with asynchronous computations.
 readImageAsync' :: forall n a. (Storable a, ChanSize n)
                 => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
-                -> CL (CLAsync (Vector a))
+                -> CL (CLAsync (V.Vector a))
 readImageAsync' (CLImage dims@(w,h,d) mem) origin region waitForIt =
   do when (not $ tripAll (>0) region)
           (throwError "Each dimension of requested region must be positive!")
@@ -369,13 +374,13 @@ readImageAsync' (CLImage dims@(w,h,d) mem) origin region waitForIt =
 -- to finish. This operation blocks until the operation is complete.
 readImage' :: forall n a. (Storable a, ChanSize n)
            => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
-           -> CL (Vector a)
+           -> CL (V.Vector a)
 readImage' img origin region waitForIt =
   readImageAsync' img origin region waitForIt >>= waitOne
 
 -- | Read the entire contents of an image into a 'Vector'. This
 -- operation blocks until the read is complete.
-readImage :: (Storable a, ChanSize n) => CLImage n a -> CL (Vector a)
+readImage :: (Storable a, ChanSize n) => CLImage n a -> CL (V.Vector a)
 readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 
 -- | Non-blocking complete image read. The resulting 'CLAsync' value
@@ -384,5 +389,5 @@ readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 -- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
 -- working with asynchronous computations.
 readImageAsync :: (Storable a, ChanSize n)
-               => CLImage n a -> CL (CLAsync (Vector a))
+               => CLImage n a -> CL (CLAsync (V.Vector a))
 readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
