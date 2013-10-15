@@ -1,5 +1,5 @@
 Name:                CLUtil
-Version:             0.6
+Version:             0.7
 Synopsis:            A thin abstraction layer over the OpenCL library.
 Description:         Medium level abstractions for working with OpenCL. OpenCL kernels are still written in the OpenCL language, but interfacing with Haskell types is simplified and the most common uses are streamlined.
 Homepage:            http://github.com/acowley/CLUtil
@@ -19,26 +19,24 @@ Extra-Source-Files: examples/QuasiCrystalDisplay.hs,
 
 Library
   Exposed-modules:     Control.Parallel.CLUtil,
-                       Control.Parallel.CLUtil.KernelArgs,
-                       Control.Parallel.CLUtil.KernelArgsCPS,
-                       Control.Parallel.CLUtil.KernelArgsAsync,
-                       Control.Parallel.CLUtil.KernelArgsCPSAsync,
-                       Control.Parallel.CLUtil.Monad,
-                       Control.Parallel.CLUtil.Monad.CL,
-                       Control.Parallel.CLUtil.Monad.Buffer,
-                       Control.Parallel.CLUtil.Monad.Image,
-                       Control.Parallel.CLUtil.Monad.KernelArgsCL,
-                       Control.Parallel.CLUtil.Monad.KernelArgsCLAsync,
-                       Control.Parallel.CLUtil.Monad.ProgramCache,
-                       Control.Parallel.CLUtil.Monad.BufferImageInterop,
-                       Control.Parallel.CLUtil.Monad.Async,
+                       Control.Parallel.CLUtil.CL,
+                       Control.Parallel.CLUtil.Buffer,
+                       Control.Parallel.CLUtil.Image,
+                       Control.Parallel.CLUtil.KernelArgsCL,
+                       Control.Parallel.CLUtil.KernelArgsCLAsync,
+                       Control.Parallel.CLUtil.ProgramCache,
+                       Control.Parallel.CLUtil.BufferImageInterop,
+                       Control.Parallel.CLUtil.Async,
                        Control.Parallel.CLUtil.State,
+                       Control.Parallel.CLUtil.Load,
+                       Control.Parallel.CLUtil.Initialization,
                        Control.Parallel.CLUtil.VectorBuffers,
                        Control.Parallel.CLUtil.KernelArgTypes
   HS-Source-Dirs:      src
   Build-depends:       base >= 4.6,
                        bytestring,
                        containers,
+                       lens >= 3.10,
                        mtl,
                        tagged >= 0.6.1,
                        transformers >= 0.3,

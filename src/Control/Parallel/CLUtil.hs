@@ -1,87 +1,60 @@
 -- |High-level interfaces for working with 'Vector's and the OpenCL
 -- library.
 module Control.Parallel.CLUtil (
-  -- * Initialization and kernel compiliation
-  ezInit, ezRelease, loadProgram, loadProgramFastMath, 
-  loadProgramFile, loadProgramFileFastMath, kernelFromFile, 
-  OpenCLState(..),
-  -- * Variable arity kernel execution 
-  -- |Similar in spirit to "Text.Printf"
+  -- * Initialization
+  ezInit, ezRelease,
+
+  -- * Running OpenCL computations
+  CL, runCL, runCL', runCLIO, runCLError, runCLClean,
+
+  -- * Mangaging images and buffers
+  registerCleanup, unregisterCleanup, ReleaseKey,
+  runCleanup, cleanupAll, releaseObject,
+
+  -- * Kernels
+  getKernel, KernelArgsCL, runKernelCL, runKernelCLAsync,
+
+  -- * Operations in the @CL@ monad
+  ask, throwError, liftIO, okay,
+
+  -- * Buffer Objects
+  CLBuffer(..), allocBuffer, allocBuffer_, initBuffer, initBuffer_,
+  readBuffer, readBuffer', writeBuffer,
+
+  -- * Image Objects
+  CLImage(..), allocImage, allocImageFmt, allocImage_, allocImageFmt_,
+  initImage, initImage_, initImageFmt, initImageFmt_,
+  readImage, readImage', writeImage,
+  NumChan(..), HalfFloat, 
+  NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
+  CLImage1, CLImage2, CLImage3, CLImage4,
+
+  -- * Buffer-Image Interoperation
+  copyBufferToImage, copyBufferToImageAsync,
+  copyImageToBuffer, copyImageToBufferAsync,
+
+  -- * Asynchonous Computations
+  CLAsync, waitAll, waitAll_, waitAll', waitAllUnit, waitOne,
+  readImageAsync', readImageAsync,
+  writeImageAsync, readBufferAsync, readBufferAsync', writeBufferAsync,
+
+  -- * OpenCL kernel arguments
   OutputSize(..), NumWorkItems(..), WorkGroup(..),
   LocalMem(..), localFloat, localDouble, localInt, localWord32,
-  runKernel, KernelArgs,
-  runKernelCPS, KernelArgsCPS,
-  runKernelAsync, KernelArgsAsync,
-  module Control.Parallel.CLUtil.VectorBuffers,
-  -- * Working with asynchronous kernels
-  initOutputBuffer,
-  IOAsync(..), waitIOAsync, waitIOAsyncs,
+
   -- * Re-exports for convenience
   module Control.Parallel.OpenCL, Vector, CInt, CFloat
   ) where
 import Control.Parallel.OpenCL
-import Control.Monad (void, (>=>))
 import Data.Vector.Storable (Vector)
 import Foreign.C.Types (CInt, CFloat)
-import Foreign.Ptr (nullPtr)
-import Control.Parallel.CLUtil.State
-import Control.Parallel.CLUtil.VectorBuffers
-import Control.Parallel.CLUtil.KernelArgs
-import Control.Parallel.CLUtil.KernelArgsCPS
-import Control.Parallel.CLUtil.KernelArgsAsync
+
+import Control.Parallel.CLUtil.CL
+import Control.Parallel.CLUtil.Initialization
+import Control.Parallel.CLUtil.Buffer
+import Control.Parallel.CLUtil.Image
+import Control.Parallel.CLUtil.BufferImageInterop
+import Control.Parallel.CLUtil.KernelArgsCL
+import Control.Parallel.CLUtil.KernelArgsCLAsync (runKernelCLAsync)
 import Control.Parallel.CLUtil.KernelArgTypes
-
--- |Allocate a buffer whose contents are undefined.
-initOutputBuffer :: Integral a => OpenCLState -> [CLMemFlag] -> a -> IO CLMem
-initOutputBuffer s flags n = clCreateBuffer (clContext s) flags (n, nullPtr)
-
--- |Initialize the first device of the given type.
-ezInit :: CLDeviceType -> IO OpenCLState
-ezInit t = do (dev:_) <- clGetDeviceIDs nullPtr t
-              context <- clCreateContext [] [dev] putStrLn
-              q <- clCreateCommandQueue context dev []
-              return $ OpenCLState dev context q
-
--- |Release a context and command queue.
-ezRelease :: OpenCLState -> IO ()
-ezRelease (OpenCLState _ c q) = 
-  void $ clReleaseContext c >> clReleaseCommandQueue q
-
--- |Load program source using a previously initialized
--- 'OpenCLState'. The returned function may be used to create
--- executable kernels defined in the supplied program source.
-loadProgram :: OpenCLState -> String -> IO (String -> IO CLKernel)
-loadProgram state src = do p <- clCreateProgramWithSource (clContext state) src
-                           clBuildProgram p [clDevice state] 
-                                          "-cl-strict-aliasing"
-                           return $ clCreateKernel p
-
--- |Load a program from a file using a previously initialized
--- 'OpenCLState'. The returned function may be used to create
--- executable kernels defined in the program file.
-loadProgramFile :: OpenCLState -> FilePath -> IO (String -> IO CLKernel)
-loadProgramFile s = readFile >=> loadProgram s
-
--- |Load program source using a previously initialized
--- 'OpenCLState'. The returned function may be used to create
--- executable kernels with the @-cl-fast-relaxed-math@ option from
--- supplied program source.
-loadProgramFastMath :: OpenCLState -> String -> IO (String -> IO CLKernel)
-loadProgramFastMath state src = 
-  do p <- clCreateProgramWithSource (clContext state) src
-     clBuildProgram p [clDevice state] 
-                    "-cl-strict-aliasing -cl-fast-relaxed-math"
-     return $ clCreateKernel p
-
--- |Load a program from a file using a previously initialized
--- 'OpenCLState'. The returned function may be used to create
--- executable kernels with the @-cl-fast-relaxed-math@ option from the
--- loaded program.
-loadProgramFileFastMath :: OpenCLState -> FilePath -> IO (String -> IO CLKernel)
-loadProgramFileFastMath s = readFile >=> loadProgramFastMath s
-
--- |Load program source from the given file and build the named
--- kernel.
-kernelFromFile :: OpenCLState -> FilePath -> String -> IO CLKernel
-kernelFromFile state file kname = 
-  readFile file >>= loadProgram state >>= ($ kname)
+import Control.Parallel.CLUtil.Async

@@ -7,12 +7,12 @@
 -- 'waitAll' function. If our asynchronous computations produce values
 -- of differing types, then we can make use of a heterogenous list to
 -- accumulate these promised results and to represent the results.
-module Control.Parallel.CLUtil.Monad.Async 
+module Control.Parallel.CLUtil.Async 
   (HList(..), (<+>), (++), (&:), singAsync,
    waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync) where
 import Control.Applicative
 import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.Monad.CL
+import Control.Parallel.CLUtil.CL
 import Foreign.Ptr (nullPtr)
 
 -- | A basic heterogenous list type.
@@ -49,7 +49,7 @@ waitAll = aux . unzip
 -- discard all of those results.
 waitAll_ :: [CLAsync a] -> CL ()
 waitAll_ = aux . unzip
-  where aux (evs,xs) = do liftIO $ do clWaitForEvents evs
+  where aux (evs,xs) = do liftIO $ do _ <- clWaitForEvents evs
                                       mapM_ clReleaseEvent evs
                           -- okay "Waiting for events" $ clWaitForEvents evs
                           -- mapM_ (okay "Releasing event" . clReleaseEvent) evs

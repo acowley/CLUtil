@@ -6,14 +6,16 @@
 -- overlapped resource usage (i.e. programs or kernels). Instead,
 -- initializers may independently use 'getKernel' without worrying if
 -- a program or kernel has already been loaded by someone else.
-module Control.Parallel.CLUtil.Monad.ProgramCache
+module Control.Parallel.CLUtil.ProgramCache
   (getKernel, emptyCache, Cache) where
 import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
-import Control.Parallel.CLUtil
-import Data.Map (Map)
-import qualified Data.Map as M
+import Control.Parallel.OpenCL
+import Control.Parallel.CLUtil.Load
+import Control.Parallel.CLUtil.State
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as M
 
 -- | A kernel cache for a particular program file.
 type KCache = (String -> IO CLKernel, Map String CLKernel)
@@ -36,7 +38,7 @@ emptyCache = M.empty
 -- kernel was already loaded, it is returned. If not, and the program
 -- was previously loaded, the loaded program is used to provide the
 -- requested kernel. If the program has not yet been loaded, it is
--- loaded from disk.
+-- loaded from the source file.
 getKernel :: (MonadState Cache m, MonadIO m, MonadReader OpenCLState m)
            => String -> String -> m CLKernel
 getKernel progName kerName = 

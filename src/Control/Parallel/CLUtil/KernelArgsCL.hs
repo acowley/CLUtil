@@ -2,7 +2,7 @@
              ForeignFunctionInterface #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
-module Control.Parallel.CLUtil.Monad.KernelArgsCL (KernelArgsCL, runKernelCL) where
+module Control.Parallel.CLUtil.KernelArgsCL (KernelArgsCL, runKernelCL) where
 import Control.Applicative
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
@@ -16,7 +16,7 @@ import Control.Parallel.CLUtil.KernelArgTypes
 import Control.Parallel.CLUtil.State
 import Control.Parallel.CLUtil.VectorBuffers
 import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.Monad.CL
+import Control.Parallel.CLUtil.CL
 
 -- NOTE: This is adapted from KernelArgsCPS. The only change is to
 -- push the use of the 'OpenCLState' value to final kernel execution

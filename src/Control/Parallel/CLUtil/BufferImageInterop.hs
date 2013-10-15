@@ -1,11 +1,11 @@
 {-# LANGUAGE TupleSections #-}
 -- | Utilities for working with 'CLBuffer's and 'CLImage's together.
-module Control.Parallel.CLUtil.Monad.BufferImageInterop where
+module Control.Parallel.CLUtil.BufferImageInterop where
 import Control.Parallel.CLUtil.State (clQueue)
-import Control.Parallel.CLUtil.Monad.Buffer (CLBuffer(..))
-import Control.Parallel.CLUtil.Monad.CL (CL, ask, throwError, liftIO)
-import Control.Parallel.CLUtil.Monad.Image (CLImage(..), CLImage1)
-import Control.Parallel.CLUtil.Monad.Async
+import Control.Parallel.CLUtil.Buffer (CLBuffer(..))
+import Control.Parallel.CLUtil.CL (CL, ask, throwError, liftIO)
+import Control.Parallel.CLUtil.Image (CLImage(..), CLImage1)
+import Control.Parallel.CLUtil.Async
 import Control.Parallel.OpenCL
 
 -- | Copy the contents of a 'CLBuffer' to a 'CLImage1' of the same
