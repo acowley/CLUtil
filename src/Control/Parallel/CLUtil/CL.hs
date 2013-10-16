@@ -4,7 +4,7 @@
 -- @resourcet@ package.
 module Control.Parallel.CLUtil.CL 
   (-- * Running OpenCL computations
-   CL, runCL, runCL', runCLIO, runCLError, runCLClean,
+   CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL,
    -- * Operations in the @CL@ monad
    ask, throwError, liftIO, okay, getKernel,
    -- * Managing resources
@@ -105,6 +105,15 @@ unregisterCleanup k = do m <- use (clCleanup . releaseMap . at k)
 runCL :: OpenCLState -> CL a -> IO (a, Cleanup)
 runCL s m = runErrorT (runStateT (runReaderT m s) freshState) >>=
             either error (return . over _2 _clCleanup)
+
+-- | Run a 'CL' action in an environment with a fresh cleanup
+-- record. This lets the caller embed an action whose resource
+-- management should be kept separate from the ambient context.
+nestCL :: CL a -> CL (a, Cleanup)
+nestCL m = do s <- ask
+              c <- use clCache
+              fmap (over _2 _clCleanup) . lift . lift $
+                runStateT (runReaderT m s) (CLState newCleanup c)
 
 -- | Run a 'CL' action with a given 'OpenCLState'. Any errors are
 -- raised by calling 'error'. This function behaves identically to

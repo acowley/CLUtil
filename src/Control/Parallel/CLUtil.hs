@@ -2,10 +2,10 @@
 -- library.
 module Control.Parallel.CLUtil (
   -- * Initialization
-  ezInit, ezRelease,
+  ezInit, ezRelease, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, runCL, runCL', runCLIO, runCLError, runCLClean,
+  CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL,
 
   -- * Mangaging images and buffers
   registerCleanup, unregisterCleanup, ReleaseKey,
@@ -18,12 +18,14 @@ module Control.Parallel.CLUtil (
   ask, throwError, liftIO, okay,
 
   -- * Buffer Objects
-  CLBuffer(..), allocBuffer, allocBuffer_, initBuffer, initBuffer_,
+  CLBuffer(..), allocBuffer, allocBufferKey, allocBuffer_, 
+  initBuffer, initBufferKey, initBuffer_,
   readBuffer, readBuffer', writeBuffer,
 
   -- * Image Objects
-  CLImage(..), allocImage, allocImageFmt, allocImage_, allocImageFmt_,
-  initImage, initImage_, initImageFmt, initImageFmt_,
+  CLImage(..), allocImage, allocImageKey, 
+  allocImageFmt, allocImage_, allocImageFmt_,
+  initImage, initImageKey, initImage_, initImageFmt, initImageFmt_,
   readImage, readImage', writeImage,
   NumChan(..), HalfFloat,
   NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
@@ -56,4 +58,5 @@ import Control.Parallel.CLUtil.BufferImageInterop
 import Control.Parallel.CLUtil.KernelArgsCL
 import Control.Parallel.CLUtil.KernelArgsCLAsync (runKernelCLAsync)
 import Control.Parallel.CLUtil.KernelArgTypes
+import Control.Parallel.CLUtil.State
 import Control.Parallel.CLUtil.Async

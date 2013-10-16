@@ -36,7 +36,7 @@ Library
   Build-depends:       base >= 4.6,
                        bytestring,
                        containers,
-                       lens >= 3.10,
+                       lens >= 3.9,
                        mtl,
                        tagged >= 0.6.1,
                        transformers >= 0.3,

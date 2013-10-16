@@ -45,11 +45,18 @@ allocBuffer_ flags n =
   where numBytes = n * sizeOf (undefined::a)
 
 -- | Allocate a new buffer object of the given number of elements. The
+-- buffer is registered for cleanup, and the key used to perform an
+-- early cleanup of the buffer is returned.
+allocBufferKey :: Storable a
+               => [CLMemFlag] -> Int -> CL (CLBuffer a, ReleaseKey)
+allocBufferKey flags n = do b <- allocBuffer_ flags n
+                            k <- registerCleanup $ () <$ releaseObject b
+                            return (b, k)
+
+-- | Allocate a new buffer object of the given number of elements. The
 -- buffer is registered for cleanup.
-allocBuffer :: Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a, ReleaseKey)
-allocBuffer flags n = do b <- allocBuffer_ flags n
-                         k <- registerCleanup $ () <$ releaseObject b
-                         return (b, k)
+allocBuffer :: Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)
+allocBuffer flags n = fst <$> allocBufferKey flags n
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is /not/ registered for cleanup.
@@ -62,12 +69,18 @@ initBuffer_ flags v =
   where sz = V.length v * sizeOf (undefined::a)
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
+-- it. The buffer is registered for cleanup, and the key used to
+-- perform an early cleanup of the buffer is returned.
+initBufferKey :: Storable a
+              => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a, ReleaseKey)
+initBufferKey flags v = do b <- initBuffer_ flags v
+                           k <- registerCleanup $ () <$ releaseObject b
+                           return (b,k)
+
+-- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is registered for cleanup.
-initBuffer :: Storable a
-           => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a, ReleaseKey)
-initBuffer flags v = do b <- initBuffer_ flags v
-                        k <- registerCleanup $ () <$ releaseObject b
-                        return (b,k)
+initBuffer :: Storable a => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a)
+initBuffer flags v = fst <$> initBufferKey flags v
 
 -- | @readBuffer' mem n events@ reads back a 'Vector' of @n@ elements
 -- from the buffer object @mem@ after waiting for @events@ to finish.

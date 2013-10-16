@@ -9,8 +9,8 @@ module Control.Parallel.CLUtil.Image (
   HalfFloat, NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
 
   -- * Creating images
-  allocImage, allocImage_, allocImageFmt, allocImageFmt_,
-  initImage, initImage_, initImageFmt, initImageFmt_,
+  allocImage, allocImageKey, allocImage_, allocImageFmt, allocImageFmt_,
+  initImage, initImageKey, initImage_, initImageFmt, initImageFmt_,
 
   -- * Working with images
   readImage', readImage, readImageAsync', readImageAsync, 
@@ -242,12 +242,22 @@ allocImageFmt flags fmt dims =
 -- format is the default for the the return type (e.g. the type
 -- 'CLImage OneChan Float' is associated with a default format of
 -- 'CLImageFormat CL_R CL_FLOAT') . The image is registered for
--- cleanup.
-allocImage :: forall f a n b. 
-              (Integral a, Foldable f, Functor f, ValidImage n b)
-           => [CLMemFlag] -> f a -> CL (CLImage n b, ReleaseKey)
-allocImage flags = allocImageFmt flags fmt
+-- cleanup, and the key used to perform an early cleanup of the image
+-- is returned.
+allocImageKey :: forall f a n b. 
+                 (Integral a, Foldable f, Functor f, ValidImage n b)
+              => [CLMemFlag] -> f a -> CL (CLImage n b, ReleaseKey)
+allocImageKey flags = allocImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
+-- | Allocate a new 2D or 3D image of the given dimensions. The image
+-- format is the default for the the return type (e.g. the type
+-- 'CLImage OneChan Float' is associated with a default format of
+-- 'CLImageFormat CL_R CL_FLOAT') . The image is registered for
+-- cleanup.
+allocImage :: (Integral a, Functor f, Foldable f, ValidImage n b)
+           => [CLMemFlag] -> f a -> CL (CLImage n b)
+allocImage flags = fmap fst . allocImageKey flags
 
 -- | Allocate a new 2D or 3D image of the given dimensions. The image
 -- format is the default for the the return type (e.g. the type
@@ -259,7 +269,6 @@ allocImage_ :: forall f a n b.
             => [CLMemFlag] -> f a -> CL (CLImage n b)
 allocImage_ flags = allocImageFmt_ flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
-
 
 -- | Initialize a new 2D or 3D image of the given dimensions with a
 -- 'Vector' of pixel data. Note that the pixel data is /flattened/
@@ -296,12 +305,21 @@ initImageFmt flags fmt dims v =
 -- | Initialize an image of the given dimensions with the a 'Vector'
 -- of pixel data. A default image format is deduced from the return
 -- type. See 'initImage'' for more information on requirements of the
--- input 'Vector'. The image is registered for cleanup.
-initImage :: forall f a n b.
-             (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
-          => [CLMemFlag] -> f a -> V.Vector b -> CL (CLImage n b, ReleaseKey)
-initImage flags = initImageFmt flags fmt
+-- input 'Vector'. The image is registered for cleanup, and the key
+-- used to perform an early cleanup of the image is returned.
+initImageKey :: forall f a n b.
+                (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
+             => [CLMemFlag] -> f a -> V.Vector b -> CL (CLImage n b, ReleaseKey)
+initImageKey flags = initImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
+
+-- | Initialize an image of the given dimensions with the a 'Vector'
+-- of pixel data. A default image format is deduced from the return
+-- type. See 'initImage'' for more information on requirements of the
+-- input 'Vector'. The image is registered for cleanup.
+initImage :: (Integral a, Foldable f, Functor f, ValidImage n b, Storable b)
+          => [CLMemFlag] -> f a -> V.Vector b -> CL (CLImage n b)
+initImage flags = (fmap fst .) . initImageKey flags
 
 -- | Initialize an image of the given dimensions with the a 'Vector'
 -- of pixel data. A default image format is deduced from the return
