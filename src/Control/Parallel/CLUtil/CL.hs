@@ -12,7 +12,7 @@ module Control.Parallel.CLUtil.CL
    -- * Releasable objects
    CLReleasable(..),
    -- * Internal types
-   Cleanup(..), CLState(..)
+   Cleanup(..), CLState(..), clCleanup, clCache
   ) where
 import Control.Applicative
 import Control.Lens
