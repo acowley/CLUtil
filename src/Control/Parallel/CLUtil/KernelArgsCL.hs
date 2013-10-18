@@ -2,7 +2,7 @@
              ForeignFunctionInterface #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
-module Control.Parallel.CLUtil.KernelArgsCL (KernelArgsCL, runKernelCL) where
+module Control.Parallel.CLUtil.KernelArgsCL (KernelArgsCL, runKernel) where
 import Control.Applicative
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
@@ -232,6 +232,6 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
 -- outputs. Uses the actual pointers underlying any vector arguments,
 -- improving performance of kernels run on the CPU.
 -- 
--- > (v1,v2) <- runKernelCL kernel vIn (Work1D 4) (Out 4) (Out 4)
-runKernelCL :: KernelArgsCL a => CLKernel -> a
-runKernelCL k = setArgCL k 0 Nothing Nothing []
+-- > (v1,v2) <- runKernel kernel vIn (Work1D 4) (Out 4) (Out 4)
+runKernel :: KernelArgsCL a => CLKernel -> a
+runKernel k = setArgCL k 0 Nothing Nothing []
