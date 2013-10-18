@@ -12,7 +12,7 @@ module Control.Parallel.CLUtil (
   runCleanup, cleanupAll, releaseObject,
 
   -- * Kernels
-  getKernel, KernelArgsCL, runKernelCL, runKernelCLAsync,
+  getKernel, KernelArgsCL, runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
   ask, throwError, liftIO, okay,
@@ -56,7 +56,7 @@ import Control.Parallel.CLUtil.Buffer
 import Control.Parallel.CLUtil.Image
 import Control.Parallel.CLUtil.BufferImageInterop
 import Control.Parallel.CLUtil.KernelArgsCL
-import Control.Parallel.CLUtil.KernelArgsCLAsync (runKernelCLAsync)
+import Control.Parallel.CLUtil.KernelArgsCLAsync (runKernelAsync)
 import Control.Parallel.CLUtil.KernelArgTypes
 import Control.Parallel.CLUtil.State
 import Control.Parallel.CLUtil.Async

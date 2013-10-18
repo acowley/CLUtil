@@ -3,7 +3,7 @@
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module Control.Parallel.CLUtil.KernelArgsCLAsync 
-  (KernelArgsCL, runKernelCLAsync) where
+  (KernelArgsCL, runKernelAsync) where
 import Control.Applicative
 import Control.Arrow (second)
 import Control.Monad (void, when)
@@ -218,11 +218,8 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
                return (Just $ ReadOutput finishOutput, szs) 
       in setArgCL k (arg+1) n wg (load:prep)
 
--- |Simple interface for calling an OpenCL kernel. Supports input
--- 'Vector' and 'Storable' arguments, and produces 'Vector' or unit
--- outputs. Uses the actual pointers underlying any vector arguments,
--- improving performance of kernels run on the CPU.
--- 
--- > (v1,v2) <- runKernelCL kernel vIn (Work1D 4) (Out 4) (Out 4)
-runKernelCLAsync :: KernelArgsCL a => CLKernel -> a
-runKernelCLAsync k = setArgCL k 0 Nothing Nothing []
+-- | Simple interface for calling an OpenCL kernel in an asynchronous
+-- fashion. Returns a 'CLAsync' value that may be waited upon for the
+-- return value of the kernel.
+runKernelAsync :: KernelArgsCL a => CLKernel -> a
+runKernelAsync k = setArgCL k 0 Nothing Nothing []
