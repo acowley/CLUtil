@@ -8,8 +8,8 @@ module Control.Parallel.CLUtil (
   CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL,
 
   -- * Mangaging images and buffers
-  registerCleanup, unregisterCleanup, ReleaseKey,
-  runCleanup, cleanupAll, releaseObject,
+  Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
+  runCleanup, cleanupAll, releaseObject, 
 
   -- * Kernels
   getKernel, KernelArgsCL, runKernel, runKernelAsync,
