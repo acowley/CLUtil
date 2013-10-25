@@ -14,7 +14,8 @@ module Control.Parallel.CLUtil.Image (
 
   -- * Working with images
   readImage', readImage, readImageAsync', readImageAsync, 
-  writeImage, writeImageAsync
+  writeImage, writeImageAsync,
+  copyImageAsync, copyImage
   ) where
 import Control.Applicative ((<$>), (<$))
 import Control.Monad (when)
@@ -409,3 +410,25 @@ readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 readImageAsync :: (Storable a, ChanSize n)
                => CLImage n a -> CL (CLAsync (V.Vector a))
 readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
+
+-- FIXME: Add some error checking to copyImageAsync to make sure the
+-- origins make sense given the image dimensions, and that the region
+-- makes sense with everything else.
+
+-- | @copyImageAsync src dst srcOrigin dstOrigin region@ enqueues an
+-- asynchronous copy from @src@ to @dst@.
+copyImageAsync :: CLImage n a -> CLImage n a
+               -> (Int,Int,Int) -> (Int,Int,Int) -> (Int,Int,Int)
+               -> CL (CLAsync ())
+copyImageAsync src dst srcOrigin dstOrigin region =
+  do q <- clQueue <$> ask
+     ev <- liftIO $ clEnqueueCopyImage q srcMem dstMem srcOrigin dstOrigin region []
+     return (ev, return ())
+  where CLImage _srcDim srcMem = src
+        CLImage _dstDim dstMem = dst
+
+-- | @copyImage src dst@ copies from 'CLImage' @src@ to @dst@.
+copyImage :: CLImage n a -> CLImage n a -> CL ()
+copyImage src@(CLImage sdims _) dst@(CLImage ddims _)
+  | sdims /= ddims = throwError "copyImage's arguments must be the same size"
+  | otherwise = copyImageAsync src dst (0,0,0) (0,0,0) sdims >>= waitOne

@@ -9,7 +9,7 @@ module Control.Parallel.CLUtil (
 
   -- * Mangaging images and buffers
   Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
-  runCleanup, cleanupAll, releaseObject, 
+  runCleanup, cleanupAll, releaseObject,
 
   -- * Kernels
   getKernel, KernelArgsCL, runKernel, runKernelAsync,
@@ -18,15 +18,15 @@ module Control.Parallel.CLUtil (
   ask, throwError, liftIO, okay,
 
   -- * Buffer Objects
-  CLBuffer(..), allocBuffer, allocBufferKey, allocBuffer_, 
+  CLBuffer(..), allocBuffer, allocBufferKey, allocBuffer_,
   initBuffer, initBufferKey, initBuffer_,
   readBuffer, readBuffer', writeBuffer,
 
   -- * Image Objects
-  CLImage(..), allocImage, allocImageKey, 
+  CLImage(..), allocImage, allocImageKey,
   allocImageFmt, allocImage_, allocImageFmt_,
   initImage, initImageKey, initImage_, initImageFmt, initImageFmt_,
-  readImage, readImage', writeImage,
+  readImage, readImage', writeImage, copyImage,
   NumChan(..), HalfFloat,
   NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
   CLImage1, CLImage2, CLImage3, CLImage4,
@@ -37,7 +37,7 @@ module Control.Parallel.CLUtil (
 
   -- * Asynchonous Computations
   CLAsync, waitAll, waitAll_, waitAll', waitAllUnit, waitOne,
-  readImageAsync', readImageAsync,
+  readImageAsync', readImageAsync, copyImageAsync,
   writeImageAsync, readBufferAsync, readBufferAsync', writeBufferAsync,
 
   -- * OpenCL kernel arguments
