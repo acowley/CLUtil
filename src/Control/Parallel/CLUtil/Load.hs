@@ -9,8 +9,8 @@ import Control.Parallel.CLUtil.State
 -- executable kernels defined in the supplied program source.
 loadProgram :: OpenCLState -> String -> IO (String -> IO CLKernel)
 loadProgram state src = do p <- clCreateProgramWithSource (clContext state) src
-                           clBuildProgram p [clDevice state] 
-                                          "-cl-strict-aliasing"
+                           clBuildProgram p [clDevice state] ""
+                                          -- "-cl-strict-aliasing"
                            return $ clCreateKernel p
 
 -- |Load a program from a file using a previously initialized
