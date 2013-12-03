@@ -5,6 +5,7 @@ import Control.Applicative ((<$>), (<$))
 import Control.Monad (when)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
+-- import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
 
@@ -91,14 +92,16 @@ readBufferAsync' (CLBuffer n' mem) n waitForIt =
      q <- clQueue <$> ask
      v <- liftIO $ VM.new n
      ev <- liftIO . VM.unsafeWith v $ \ptr ->
-             clEnqueueReadBuffer q mem True 0 sz (castPtr ptr) waitForIt
+             -- do (_, src) <- clEnqueueMapBuffer q mem True [CL_MAP_READ] 0 sz waitForIt
+             --    copyBytes (castPtr ptr) src sz
+             --    clEnqueueUnmapMemObject q mem src []
+                clEnqueueReadBuffer q mem True 0 sz (castPtr ptr) waitForIt
      return $ (ev, liftIO $ V.unsafeFreeze v)
   where sz = n * sizeOf (undefined::a)
 
 -- | @readBuffer' buf n events@ performs a blocking read of the first
 -- @n@ elements of a buffer after waiting for @events@.
-readBuffer' :: forall a. Storable a
-            => CLBuffer a -> Int -> [CLEvent] -> CL (V.Vector a)
+readBuffer' :: Storable a => CLBuffer a -> Int -> [CLEvent] -> CL (V.Vector a)
 readBuffer' buf n waitForIt = readBufferAsync' buf n waitForIt >>= waitOne
 
 -- | @readBuffer mem@ reads back a 'Vector' containing all the data
