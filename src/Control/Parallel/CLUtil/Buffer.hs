@@ -129,3 +129,37 @@ writeBufferAsync (CLBuffer n mem) v =
 -- | Perform a blocking write of a 'Vector's contents to a buffer object.
 writeBuffer :: Storable a => CLBuffer a -> V.Vector a -> CL ()
 writeBuffer b v = writeBufferAsync b v >>= waitOne
+
+-- | Create a read-only 'CLBuffer' that shares an underlying pointer
+-- with a 'V.Vector', then apply a function to that buffer. This is
+-- typically used to have an OpenCL kernel directly read from a
+-- vector. If the OpenCL context can not directly use the pointer,
+-- this will raise a runtime error!
+withSharedVector :: forall a r. Storable a
+                 => V.Vector a -> (CLBuffer a -> CL r) -> CL r
+withSharedVector v go = 
+  do ctx <- clContext <$> ask
+     mem <- liftIO . V.unsafeWith v $ \ptr ->
+       clCreateBuffer ctx [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR]
+                      (sz, castPtr ptr)
+     r <- go (CLBuffer (V.length v) mem)
+     liftIO $ clReleaseMemObject mem
+     return r
+  where sz = V.length v * sizeOf (undefined::a)
+
+-- | Create a read-write 'CLBuffer' that shares an underlying pointer
+-- with an 'VM.IOVector', then apply the given function to that
+-- buffer. This is typically used to have an OpenCL kernel write
+-- directly to a Haskell vector. If the OpenCL context can not
+-- directly use the pointer, this will raise a runtime error!
+withSharedMVector :: forall a r. Storable a
+                  => VM.IOVector a -> (CLBuffer a -> CL r) -> CL r
+withSharedMVector v go =
+  do ctx <- clContext <$> ask
+     mem <- liftIO . VM.unsafeWith v $ \ptr ->
+       clCreateBuffer ctx [CL_MEM_READ_WRITE, CL_MEM_USE_HOST_PTR]
+                      (sz, castPtr ptr)
+     r <- go (CLBuffer (VM.length v) mem)
+     liftIO $ clReleaseMemObject mem
+     return r
+  where sz = VM.length v * sizeOf (undefined::a)
