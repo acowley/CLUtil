@@ -20,7 +20,7 @@ module Control.Parallel.CLUtil (
   -- * Buffer Objects
   CLBuffer(..), allocBuffer, allocBufferKey, allocBuffer_,
   initBuffer, initBufferKey, initBuffer_,
-  readBuffer, readBuffer', writeBuffer,
+  readBuffer, readBuffer', writeBuffer, withSharedVector, withSharedMVector,
 
   -- * Image Objects
   CLImage(..), allocImage, allocImageKey,
