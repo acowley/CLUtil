@@ -25,6 +25,7 @@ import Control.Parallel.CLUtil.State (OpenCLState)
 import Control.Parallel.OpenCL (CLKernel)
 import Data.Foldable (sequenceA_)
 import Data.IntMap.Strict (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Monoid
 
 -- | Release resources used by OpenCL.
@@ -36,6 +37,19 @@ type ReleaseKey = Int
 
 newCleanup :: Cleanup
 newCleanup = Cleanup 0 mempty
+
+-- | This is a somewhat dangerous 'Monoid' instance. If you have two
+-- independently created 'Cleanup' values, and you have held on to
+-- 'ReleaseKey's for specific resources, then combining 'Cleanup'
+-- values will link the cleanup actions for keys found in both. This
+-- means that running the cleanup action for one resource might cause
+-- the cleanup action for another resource to run. This is a downside
+-- to stateful programming where we hold on to references
+-- (i.e. 'ReleaseKey's).
+instance Monoid Cleanup where
+  mempty = newCleanup
+  Cleanup k1 m1 `mappend` Cleanup k2 m2 = Cleanup (max k1 k2)
+                                                  (IM.unionWith (>>) m1 m2)
 
 data CLState = CLState { _clCleanup :: !Cleanup
                        , _clCache   :: !C.Cache }
