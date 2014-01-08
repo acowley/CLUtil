@@ -2,10 +2,11 @@
 -- library.
 module Control.Parallel.CLUtil (
   -- * Initialization
-  ezInit, ezRelease, OpenCLState(..),
+  ezInit, clDeviceGPU, clDeviceCPU, clDeviceSelect,
+  ezRelease, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL,
+  CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL, clInitState,
 
   -- * Mangaging images and buffers
   Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
