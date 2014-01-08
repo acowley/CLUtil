@@ -143,7 +143,7 @@ withSharedVector v go =
        clCreateBuffer ctx [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR]
                       (sz, castPtr ptr)
      r <- go (CLBuffer (V.length v) mem)
-     liftIO $ clReleaseMemObject mem
+     _ <- liftIO $ clReleaseMemObject mem
      return r
   where sz = V.length v * sizeOf (undefined::a)
 
@@ -160,6 +160,6 @@ withSharedMVector v go =
        clCreateBuffer ctx [CL_MEM_READ_WRITE, CL_MEM_USE_HOST_PTR]
                       (sz, castPtr ptr)
      r <- go (CLBuffer (VM.length v) mem)
-     liftIO $ clReleaseMemObject mem
+     _ <- liftIO $ clReleaseMemObject mem
      return r
   where sz = VM.length v * sizeOf (undefined::a)
