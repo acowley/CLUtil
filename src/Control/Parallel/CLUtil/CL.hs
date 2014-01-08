@@ -1,10 +1,10 @@
-{-# LANGUAGE FlexibleContexts, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, ImpredicativeTypes, RankNTypes, TemplateHaskell #-}
 -- | A monad transformer stack for working with OpenCL. Includes a
 -- lightweight resource management layer in the style of the
 -- @resourcet@ package.
 module Control.Parallel.CLUtil.CL 
   (-- * Running OpenCL computations
-   CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL,
+   CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL, clInitState,
    -- * Operations in the @CL@ monad
    ask, throwError, liftIO, okay, getKernel,
    -- * Managing resources
@@ -21,11 +21,13 @@ import Control.Monad.Error.Class (MonadError, throwError)
 import Control.Monad.Reader
 import Control.Monad.State
 import qualified Control.Parallel.CLUtil.ProgramCache as C
+import Control.Parallel.CLUtil.Initialization (ezRelease)
 import Control.Parallel.CLUtil.State (OpenCLState)
 import Control.Parallel.OpenCL (CLKernel)
 import Data.Foldable (sequenceA_)
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IM
+import Data.IORef
 import Data.Monoid
 
 -- | Release resources used by OpenCL.
@@ -61,6 +63,26 @@ freshState = CLState newCleanup C.emptyCache
 -- | Run all remaining cleanup actions.
 cleanupAll :: Cleanup -> IO ()
 cleanupAll (Cleanup _ m) = sequenceA_ m
+
+-- | Initialize some mutable state for running OpenCL
+-- computations. This maintains a reference to a cache of loaded
+-- programs and resource allocations. The first returned function may
+-- be used to run 'CL' computations in a shared state. The second
+-- returned value will release all remaining resources and the OpenCL
+-- device itself.
+clInitState :: OpenCLState -> IO (forall a. CL a -> IO a, IO ())
+clInitState dev =
+  do accState <- newIORef freshState
+     let done = readIORef accState
+                >>= cleanupAll . _clCleanup
+                >> ezRelease dev
+         goCL :: CL a -> IO a
+         goCL m = do s <- readIORef accState
+                     (r,s') <- either error id <$>
+                               runErrorT (runStateT (runReaderT m dev) s)
+                     writeIORef accState s'
+                     return r
+     return (goCL, done)
 
 -- | Get a kernel given a program file name and a kernel name. If the
 -- kernel was already loaded, it is returned. If not, and the program
