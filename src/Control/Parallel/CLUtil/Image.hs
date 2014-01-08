@@ -349,8 +349,16 @@ writeImageAsync (CLImage dims@(w,h,d) mem) v =
 
 -- | Perform a blocking write of a 'Vector''s contents to an
 -- image. See 'writeImageAsync' for more information.
-writeImage :: (Storable a, ChanSize n) => CLImage n a -> V.Vector a -> CL ()
-writeImage img v = writeImageAsync img v >>= waitOne
+writeImage :: forall n a. (Storable a, ChanSize n)
+           => CLImage n a -> V.Vector a -> CL ()
+--writeImage img v = writeImageAsync img v >>= waitOne
+writeImage (CLImage dims@(w,h,d) mem) v =
+  do q <- clQueue <$> ask
+     when (w*h*d*numChan (Proxy::Proxy n) /= V.length v)
+          (throwError "Vector length is not equal to image dimensions!")
+     liftIO . V.unsafeWith v $ \ptr ->
+       clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr) []
+       >>= clWaitForEvents . (:[]) >> return ()
 
 tripZipAll :: (a -> a -> Bool) -> (a,a,a) -> (a,a,a) -> Bool
 tripZipAll = ((tripAll id .) .) . tripZip
