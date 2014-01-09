@@ -6,7 +6,7 @@ module Control.Parallel.CLUtil.CL
   (-- * Running OpenCL computations
    CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL, clInitState,
    -- * Operations in the @CL@ monad
-   ask, throwError, liftIO, okay, getKernel,
+   ask, throwError, liftIO, okay, getKernel, getKernelFromSource,
    -- * Managing resources
    registerCleanup, unregisterCleanup, runCleanup, cleanupAll, ReleaseKey,
    -- * Releasable objects
@@ -89,8 +89,16 @@ clInitState dev =
 -- was previously loaded, the loaded program is used to provide the
 -- requested kernel. If the program has not yet been loaded, it is
 -- loaded from the source file.
-getKernel :: String -> String -> CL CLKernel
+getKernel :: FilePath -> String -> CL CLKernel
 getKernel f k = zoom clCache (C.getKernel f k)
+
+-- | Get a kernel given program source code and a kernel name. If the
+-- kernel was already loaded, it is returned. If not, and the program
+-- was previously loaded, the loaded program is used to provide the
+-- requested kernel. If the program has not yet been loaded, it is
+-- loaded from the given source code.
+getKernelFromSource :: String -> String -> CL CLKernel
+getKernelFromSource f k = zoom clCache (C.getKernelFromSource f k)
 
 -- | The 'CL' type captures OpenCL context as well as resource
 -- initialization and cleanup helpers. For initialization, OpenCL
