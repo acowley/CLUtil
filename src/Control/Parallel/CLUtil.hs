@@ -13,7 +13,7 @@ module Control.Parallel.CLUtil (
   runCleanup, cleanupAll, releaseObject,
 
   -- * Kernels
-  getKernel, KernelArgsCL, runKernel, runKernelAsync,
+  getKernel, getKernelFromSource, KernelArgsCL, runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
   ask, throwError, liftIO, okay,

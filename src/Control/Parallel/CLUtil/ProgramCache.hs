@@ -7,7 +7,7 @@
 -- initializers may independently use 'getKernel' without worrying if
 -- a program or kernel has already been loaded by someone else.
 module Control.Parallel.CLUtil.ProgramCache
-  (getKernel, emptyCache, Cache) where
+  (getKernel, getKernelFromSource, emptyCache, Cache) where
 import Control.Monad.IO.Class
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
@@ -34,19 +34,33 @@ loadKernel' kName p@(mk, cache) =
 emptyCache :: Cache
 emptyCache = M.empty
 
+loadKernelAux :: (MonadState Cache m, MonadIO m, MonadReader OpenCLState m)
+              => (String -> OpenCLState -> IO (String -> IO CLKernel))
+              -> String -> String -> m CLKernel
+loadKernelAux prepProgram progName kerName =
+  do cache <- get
+     (k,c) <- case M.lookup progName cache of
+                Nothing -> do mk <- ask >>= liftIO . prepProgram progName
+                              loadKernel' kerName (mk, M.empty)
+                Just p -> loadKernel' kerName p
+     put $ M.insert progName c cache
+     return k
+
 -- | Get a kernel given a program file name and a kernel name. If the
 -- kernel was already loaded, it is returned. If not, and the program
 -- was previously loaded, the loaded program is used to provide the
 -- requested kernel. If the program has not yet been loaded, it is
 -- loaded from the source file.
 getKernel :: (MonadState Cache m, MonadIO m, MonadReader OpenCLState m)
-           => String -> String -> m CLKernel
-getKernel progName kerName = 
-  do cache <- get
-     (k,c) <- 
-       case M.lookup progName cache of
-         Nothing -> do mk <- ask >>= liftIO . flip loadProgramFile progName
-                       loadKernel' kerName (mk, M.empty)
-         Just p -> loadKernel' kerName p
-     put $ M.insert progName c cache
-     return k
+           => FilePath -> String -> m CLKernel
+getKernel = loadKernelAux $ flip loadProgramFile
+
+-- | Get a kernel given program source and a kernel name. If the
+-- kernel was already loaded, it is returned. If not, and the program
+-- source was previously loaded, the loaded program is used to provide
+-- the requested kernel. If the program has not yet been loaded, it is
+-- loaded from the given source code.
+getKernelFromSource :: ( MonadState Cache m, MonadIO m
+                       , MonadReader OpenCLState m)
+                    => String -> String -> m CLKernel
+getKernelFromSource = loadKernelAux $ flip loadProgram
