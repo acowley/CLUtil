@@ -46,7 +46,7 @@ module Control.Parallel.CLUtil (
   LocalMem(..), localFloat, localDouble, localInt, localWord32,
 
   -- * Re-exports for convenience
-  module Control.Parallel.OpenCL, Vector, CInt, CFloat
+  module Control.Parallel.OpenCL, Vector, CInt, CFloat, Word8, Storable
   ) where
 import Control.Parallel.OpenCL
 import Data.Vector.Storable (Vector)
@@ -62,3 +62,6 @@ import Control.Parallel.CLUtil.KernelArgsCLAsync (runKernelAsync)
 import Control.Parallel.CLUtil.KernelArgTypes
 import Control.Parallel.CLUtil.State
 import Control.Parallel.CLUtil.Async
+
+import Data.Word (Word8)
+import Foreign.Storable (Storable)
