@@ -9,7 +9,9 @@ import Foreign.Ptr (nullPtr)
 clStateInit :: CLDeviceID -> IO OpenCLState
 clStateInit dev =
   do context <- clCreateContext [] [dev] putStrLn
-     OpenCLState dev context `fmap` clCreateCommandQueue context dev []
+     OpenCLState dev context `fmap` 
+       clCreateCommandQueue context dev
+                            [CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE]
 
 -- |Initialize the first device of the given type.
 ezInit :: CLDeviceType -> IO OpenCLState
