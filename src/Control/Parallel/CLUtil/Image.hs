@@ -1,5 +1,5 @@
 {-# LANGUAGE ConstraintKinds, DataKinds, KindSignatures, PolyKinds, 
-             ScopedTypeVariables, 
+             ScopedTypeVariables, RankNTypes,
              GeneralizedNewtypeDeriving, EmptyDataDecls #-}
 -- | Typed monadic interface for working with OpenCL images.
 module Control.Parallel.CLUtil.Image (
@@ -15,10 +15,18 @@ module Control.Parallel.CLUtil.Image (
   -- * Working with images
   readImage', readImage, readImageAsync', readImageAsync, 
   writeImage, writeImageAsync,
-  copyImageAsync, copyImage
+  copyImageAsync, copyImage,
+  
+  -- * Efficient access to image contents
+  withImage, withImageAsync, withImageRW, withImageRWAsync
   ) where
 import Control.Applicative ((<$>), (<$))
-import Control.Monad (when)
+import Control.Concurrent (forkIO)
+import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
+import Control.Exception (evaluate)
+import Control.Monad (when, void)
+import Control.Monad.ST (ST)
+import Control.Monad.ST.Unsafe (unsafeSTToIO)
 import Data.Foldable (Foldable)
 import qualified Data.Foldable as F
 import Data.Int (Int8, Int16, Int32)
@@ -27,6 +35,8 @@ import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Data.Word (Word8, Word16, Word32)
 import Foreign.C.Types (CFloat, CInt)
+import Foreign.ForeignPtr (newForeignPtr_)
+import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
 import Control.Parallel.CLUtil.Async
@@ -345,7 +355,7 @@ writeImageAsync (CLImage dims@(w,h,d) mem) v =
           (throwError "Vector length is not equal to image dimensions!")
      ev <- liftIO . V.unsafeWith v $ \ptr ->
              clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr) []
-     return (ev, return ())
+     return . clAsync ev $ return ()
 
 -- | Perform a blocking write of a 'Vector''s contents to an
 -- image. See 'writeImageAsync' for more information.
@@ -356,9 +366,10 @@ writeImage (CLImage dims@(w,h,d) mem) v =
   do q <- clQueue <$> ask
      when (w*h*d*numChan (Proxy::Proxy n) /= V.length v)
           (throwError "Vector length is not equal to image dimensions!")
-     liftIO . V.unsafeWith v $ \ptr ->
-       clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr) []
-       >>= clWaitForEvents . (:[]) >> return ()
+     liftIO . V.unsafeWith v $ \ptr -> do
+       ev <- clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr) []
+       _ <- clWaitForEvents [ev] >> clReleaseEvent ev
+       return ()
 
 tripZipAll :: (a -> a -> Bool) -> (a,a,a) -> (a,a,a) -> Bool
 tripZipAll = ((tripAll id .) .) . tripZip
@@ -392,7 +403,7 @@ readImageAsync' (CLImage dims@(w,h,d) mem) origin region waitForIt =
      ev <- liftIO . VM.unsafeWith v $ \ptr ->
              clEnqueueReadImage q mem True origin region 0 0
                                 (castPtr ptr) waitForIt
-     return (ev, liftIO $ V.unsafeFreeze v)
+     return . clAsync ev $ liftIO $ V.unsafeFreeze v
   where n = fromIntegral $ w*h*d*numChan (Proxy::Proxy n)
 
 -- | @readImage' mem origin region events@ reads back a 'Vector' of
@@ -419,6 +430,70 @@ readImageAsync :: (Storable a, ChanSize n)
                => CLImage n a -> CL (CLAsync (V.Vector a))
 readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
 
+-- | Provides access to a memory-mapped 'VM.MVector' of a
+-- 'CLImage'. The result of applying the given function to the vector
+-- is evaluated to WHNF, but the caller should ensure that this is
+-- sufficient to not require hanging onto a reference to the vector
+-- data, as this reference will not be valid. Returning the vector
+-- itself is right out. The 'CLMapFlag's supplied determine if we have
+-- read-only, write-only, or read/write access to the 'VM.MVector'.
+withImageAsync_ :: forall n a r. (ChanSize n, Storable a)
+                => [CLMapFlag] -> CLImage n a 
+                -> (forall s. VM.MVector s a -> ST s r) -> CL (CLAsync r)
+withImageAsync_ flags (CLImage dims mem) f =
+  do q <- clQueue <$> ask
+     liftIO $ do 
+       (ev, (ptr, _pitch, sz)) <- clEnqueueMapImage q mem False flags
+                                                    (0,0,0) dims []
+       let go = do fp <- newForeignPtr_ $ castPtr ptr
+                   x <- evaluate =<< 
+                        (unsafeSTToIO
+                         $ f . VM.unsafeFromForeignPtr0 fp
+                         $ fromIntegral sz `quot` sizeOf (undefined::a))
+                   ev' <- clEnqueueUnmapMemObject q mem ptr []
+                   _ <- clWaitForEvents [ev'] >> clReleaseEvent ev'
+                   return x
+       return . clAsync ev $ liftIO go
+
+-- | Provides read/write access to a memory-mapped 'VM.MVector' of a
+-- 'CLImage'. The caller should ensure that this is sufficient to not
+-- require hanging onto a reference to the vector data, as this
+-- reference will not be valid. Returning the vector itself is right
+-- out.
+withImageRWAsync :: (ChanSize n, Storable a)
+                 => CLImage n a -> (forall s. VM.MVector s a -> ST s r)
+                 -> CL (CLAsync r)
+withImageRWAsync = withImageAsync_ [CL_MAP_READ, CL_MAP_WRITE]
+
+-- | Provides read/write access to a memory-mapped 'VM.MVector' of a
+-- 'CLImage'. The caller should ensure that this is sufficient to not
+-- require hanging onto a reference to the vector data, as this
+-- reference will not be valid. Returning the vector itself is right
+-- out.
+withImageRW :: (ChanSize n, Storable a)
+            => CLImage n a -> (forall s. VM.MVector s a -> ST s r) -> CL r
+withImageRW img f = withImageRWAsync img f >>= waitOne
+
+-- | Provides read-only access to a memory-mapped 'V.Vector' of a
+-- 'CLImage'. The result of applying the given function to the vector
+-- is evaluated to WHNF, but the caller should ensure that this is
+-- sufficient to not require hanging onto a reference to the vector
+-- data, as this reference will not be valid. Returning the vector
+-- itself is right out.
+withImageAsync :: (ChanSize n, Storable a)
+               => CLImage n a -> (V.Vector a -> r) -> CL (CLAsync r)
+withImageAsync img f = 
+  withImageAsync_ [CL_MAP_READ] img (fmap f . V.unsafeFreeze)
+
+-- | Provides read/write access to a memory-mapped 'V.Vector' of a
+-- 'CLImage'. The result of applying the given function to the vector
+-- is evaluated to WHNF, but the caller should ensure that this is
+-- sufficient to not require hanging onto a reference to the vector
+-- data, as this reference will not be valid. Returning the vector
+-- itself is right out.
+withImage :: (ChanSize n, Storable a)
+          => CLImage n a -> (V.Vector a -> r) -> CL r
+withImage img f = withImageAsync img f >>= waitOne
 -- FIXME: Add some error checking to copyImageAsync to make sure the
 -- origins make sense given the image dimensions, and that the region
 -- makes sense with everything else.
@@ -431,7 +506,7 @@ copyImageAsync :: CLImage n a -> CLImage n a
 copyImageAsync src dst srcOrigin dstOrigin region =
   do q <- clQueue <$> ask
      ev <- liftIO $ clEnqueueCopyImage q srcMem dstMem srcOrigin dstOrigin region []
-     return (ev, return ())
+     return . clAsync ev $ return ()
   where CLImage _srcDim srcMem = src
         CLImage _dstDim dstMem = dst
 
