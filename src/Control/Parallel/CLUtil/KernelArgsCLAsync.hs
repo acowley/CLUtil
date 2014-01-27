@@ -97,7 +97,7 @@ instance KernelArgsCL (CL (CLAsync ())) where
       (ev, (o,cleanup)) <- runCPS [] s k n wg prep
       when (not (null o)) (error "Outputs aren't bound!")
       sequence_ cleanup
-      return (ev, return ())
+      return . clAsync ev $ return ()
   setArgCL _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Execute a kernel where the calling context is expecting a single
@@ -111,7 +111,7 @@ instance forall a. (Storable a) => KernelArgsCL (CL (CLAsync (Vector a))) where
              [f] -> mkRead <$> f
              _ -> error "More outputs specified than bound"
       sequence_ cleanup
-      return (ev, liftIO r1)
+      return . clAsync ev $ liftIO r1
   setArgCL _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Execute a kernel where the calling context is expecting two
@@ -128,7 +128,7 @@ instance forall a b. (Storable a, Storable b) =>
                    [f,g] -> (,) <$> (mkRead <$> f) <*> (mkRead <$> g)
                    _ -> error "More outputs specified than bound"
       sequence_ cleanup
-      return (ev, liftIO $ (,) <$> r1 <*> r2)
+      return . clAsync ev . liftIO $ (,) <$> r1 <*> r2
   setArgCL _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Execute a kernel where the calling context is expecting three
@@ -147,7 +147,7 @@ instance forall a b c. (Storable a, Storable b, Storable c) =>
                                       <*> (mkRead <$> h)
                       _ -> error "Different number of outputs specified than bound"
       sequence_ cleanup
-      return (ev, liftIO $ (,,) <$> r1 <*> r2 <*> r3)
+      return . clAsync ev . liftIO $ (,,) <$> r1 <*> r2 <*> r3
   setArgCL _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Pass an arbitrary 'Storable' as a kernel argument.

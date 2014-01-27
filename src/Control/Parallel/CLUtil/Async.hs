@@ -8,11 +8,14 @@
 -- of differing types, then we can make use of a heterogenous list to
 -- accumulate these promised results and to represent the results.
 module Control.Parallel.CLUtil.Async 
-  (HList(..), (<+>), (++), (&:), singAsync,
-   waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync) where
+  (HList(..), (<+>), (++), (&:), singAsync, waitReleaseEvent,
+   waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync,
+   clAsync, ioAsync, sequenceAsync) where
 import Control.Applicative
+import Control.Arrow (first)
 import Control.Parallel.OpenCL
 import Control.Parallel.CLUtil.CL
+import Data.Monoid
 import Foreign.Ptr (nullPtr)
 
 -- | A basic heterogenous list type.
@@ -23,7 +26,25 @@ infixr 5 :&
 
 -- | A 'CLEvent' that will fire when the result of an associated 'CL'
 -- computation is ready.
-type CLAsync a = (CLEvent, CL a)
+-- type CLAsync a = ([CLEvent], CL a)
+type CLAsync a = ([IO ()], CL a)
+
+-- | Wait for an event, then immediately release it, decrementing its
+-- reference count.
+waitReleaseEvent :: CLEvent -> IO ()
+waitReleaseEvent ev = clWaitForEvents [ev] >> clReleaseEvent ev >> return ()
+
+-- | Constructor for a simple, single event 'CLAsync'.
+clAsync :: CLEvent -> CL a -> CLAsync a
+clAsync = (,) . pure . waitReleaseEvent
+
+-- | Make a 'CLAsync' that waits for an opaque 'IO' action.
+ioAsync :: IO () -> CL a -> CLAsync a
+ioAsync = (,) . pure
+
+-- | Sequence two 'CLAsync's, returning the result of the second.
+sequenceAsync :: CLAsync () -> CLAsync b -> CLAsync b
+sequenceAsync (ev1, r1) (ev2, r2) = (ev1<>ev2, r1 >> r2)
 
 -- | Helper for lifting 'HList''s cons operation into an
 -- 'Applicative'.
@@ -32,15 +53,15 @@ x &: xs = (:&) <$> x <*> xs
 infixr 5 &:
 
 -- | Helper for producing a single-element 'HList' from a 'CLAsync'.
-singAsync :: CL (CLAsync a) -> CL (HList '[(CLEvent, CL a)])
+singAsync :: CL (CLAsync a) -> CL (HList '[CLAsync a])
 singAsync e = (:&) <$> e <*> pure HNil
 
 -- | Block until the results of all given 'CL' actions are ready. Each
 -- action must produce the same type of value.
 waitAll :: [CLAsync a] -> CL [a]
-waitAll = aux . unzip
+waitAll = aux . first concat . unzip
   where aux (evs,xs) = 
-          do liftIO $ clWaitForEvents evs >> mapM_ clReleaseEvent evs
+          do liftIO $ sequence_ evs
              -- okay "Waiting for events" $ clWaitForEvents evs
              -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
              sequence xs
@@ -48,9 +69,8 @@ waitAll = aux . unzip
 -- | Block until the results of all given 'CL' actions are ready, then
 -- discard all of those results.
 waitAll_ :: [CLAsync a] -> CL ()
-waitAll_ = aux . unzip
-  where aux (evs,xs) = do liftIO $ do _ <- clWaitForEvents evs
-                                      mapM_ clReleaseEvent evs
+waitAll_ = aux . first concat . unzip
+  where aux (evs,xs) = do liftIO $ sequence_ evs
                           -- okay "Waiting for events" $ clWaitForEvents evs
                           -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
                           sequence_ xs
@@ -85,29 +105,28 @@ type instance Sequence '[] = '[]
 type instance Sequence (m a ': as) = a ': Sequence as
 
 class HasEvents rs where
-  getEvents :: HList rs -> [CLEvent]
+  getEvents :: HList rs -> [IO ()]
 
 instance HasEvents '[] where
   getEvents _ = []
 
-instance HasEvents ts => HasEvents ((CLEvent,a) ': ts) where
-  getEvents ((e,_) :& xs) = e : getEvents xs
+instance HasEvents ts => HasEvents (CLAsync a ': ts) where
+  getEvents ((e,_) :& xs) = e ++ getEvents xs
 
-class SequenceH m ts where
-  sequenceH :: Applicative m => HList ts -> m (HList (Sequence (MapSnd ts)))
+class SequenceH ts where
+  sequenceH :: HList ts -> CL (HList (Sequence (MapSnd ts)))
 
-instance SequenceH m '[] where
+instance SequenceH '[] where
   sequenceH _ = pure HNil
 
-instance SequenceH m ts => SequenceH m ((e, m a) ': ts) where
+instance SequenceH ts => SequenceH (CLAsync a ': ts) where
   sequenceH ((_,x) :& xs) = (:&) <$> x <*> sequenceH xs
 
 -- | Block until the results of all given 'CL' actions are ready. Each
 -- action may produce a different type of value.
-waitAll' :: (SequenceH CL xs, HasEvents xs)
+waitAll' :: (SequenceH xs, HasEvents xs)
          => HList xs -> CL (HList (Sequence (MapSnd xs)))
-waitAll' xs = do liftIO $ clWaitForEvents evs >> mapM_ clReleaseEvent evs
+waitAll' xs = do liftIO $ sequence_ (getEvents xs)
                  -- okay "Waiting for events" $ clWaitForEvents evs
                  -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
                  sequenceH xs
-  where evs = filter (/= nullPtr) $ getEvents xs

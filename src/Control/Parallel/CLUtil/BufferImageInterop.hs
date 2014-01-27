@@ -1,4 +1,3 @@
-{-# LANGUAGE TupleSections #-}
 -- | Utilities for working with 'CLBuffer's and 'CLImage's together.
 module Control.Parallel.CLUtil.BufferImageInterop where
 import Control.Parallel.CLUtil.State (clQueue)
@@ -15,7 +14,7 @@ import Control.Parallel.OpenCL
 copyBufferToImageAsync :: CLBuffer a -> CLImage1 b -> CL (CLAsync ())
 copyBufferToImageAsync (CLBuffer bufLen bufObj) (CLImage imgDims imgObj)
   | bufLen /= dimProd = throwError "Buffer is not the same size as image"
-  | otherwise = (, return ()) `fmap`
+  | otherwise = flip clAsync (return ()) `fmap`
     do q <- fmap clQueue ask
        liftIO $ clEnqueueCopyBufferToImage q bufObj imgObj 0 (0,0,0) imgDims []
   where dimProd = let (w,h,d) = imgDims in w*h*d
@@ -34,7 +33,7 @@ copyBufferToImage buf img = copyBufferToImageAsync buf img >>= waitOne
 copyImageToBufferAsync :: CLImage1 a -> CLBuffer a -> CL (CLAsync ())
 copyImageToBufferAsync (CLImage imgDims imgObj) (CLBuffer bufLen bufObj)
   | dimProd /= bufLen = throwError "Buffer is not the same size as image"
-  | otherwise = (, return ()) `fmap`
+  | otherwise = flip clAsync (return ()) `fmap`
     do q <- fmap clQueue ask
        liftIO $ clEnqueueCopyImageToBuffer q imgObj bufObj (0,0,0) imgDims 0 []
   where dimProd = let (w,h,d) = imgDims in w*h*d
