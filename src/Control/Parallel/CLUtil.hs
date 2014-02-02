@@ -10,7 +10,7 @@ module Control.Parallel.CLUtil (
 
   -- * Mangaging images and buffers
   Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
-  runCleanup, cleanupAll, releaseObject,
+  runCleanup, cleanupAll, releaseObject, HasCLMem(getCLMem),
 
   -- * Kernels
   getKernel, getKernelFromSource, KernelArgsCL, runKernel, runKernelAsync,

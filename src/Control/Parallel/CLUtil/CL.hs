@@ -1,4 +1,5 @@
-{-# LANGUAGE FlexibleContexts, ImpredicativeTypes, RankNTypes, TemplateHaskell #-}
+{-# LANGUAGE FlexibleContexts, ImpredicativeTypes, RankNTypes, TemplateHaskell,
+             TypeSynonymInstances, FlexibleInstances #-}
 -- | A monad transformer stack for working with OpenCL. Includes a
 -- lightweight resource management layer in the style of the
 -- @resourcet@ package.
@@ -9,8 +10,8 @@ module Control.Parallel.CLUtil.CL
    ask, throwError, liftIO, okay, getKernel, getKernelFromSource,
    -- * Managing resources
    registerCleanup, unregisterCleanup, runCleanup, cleanupAll, ReleaseKey,
-   -- * Releasable objects
-   CLReleasable(..),
+   -- * Releasable objects and CLMem wrappers
+   CLReleasable(..), HasCLMem(..),
    -- * Internal types
    Cleanup(..), CLState(..), clCleanup, clCache
   ) where
@@ -23,7 +24,7 @@ import Control.Monad.State
 import qualified Control.Parallel.CLUtil.ProgramCache as C
 import Control.Parallel.CLUtil.Initialization (ezRelease)
 import Control.Parallel.CLUtil.State (OpenCLState)
-import Control.Parallel.OpenCL (CLKernel)
+import Control.Parallel.OpenCL (CLKernel, CLMem)
 import Data.Foldable (sequenceA_)
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IM
@@ -194,3 +195,10 @@ okay msg m = liftIO m >>= flip when (throwError $ "Failed: "++msg)
 class CLReleasable a where
   -- | Decrement the reference count of a memory object.
   releaseObject :: a -> IO Bool
+
+-- | A class for things that wrap a 'CLMem' object.
+class HasCLMem a where
+  getCLMem :: a -> CLMem
+
+instance HasCLMem CLMem where
+  getCLMem = id

@@ -44,6 +44,9 @@ instance Storable (CLBuffer a) where
 instance CLReleasable (CLBuffer a) where
   releaseObject (CLBuffer _ m) = clReleaseMemObject m
 
+instance HasCLMem (CLBuffer a) where
+  getCLMem (CLBuffer _ m) = m
+
 -- | Allocate a new buffer object of the given number of elements. The
 -- buffer is /not/ registered for cleanup.
 allocBuffer_ :: forall a. Storable a => [CLMemFlag] -> Int -> CL (CLBuffer a)
