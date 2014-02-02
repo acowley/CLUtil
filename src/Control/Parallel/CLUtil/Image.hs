@@ -84,6 +84,9 @@ data CLImage (n::NumChan) a = CLImage { imageDims   :: (Int,Int,Int)
 instance CLReleasable (CLImage n a) where
   releaseObject (CLImage _ m) = clReleaseMemObject m
 
+instance HasCLMem (CLImage n a) where
+  getCLMem (CLImage _ m) = m
+
 -- | A 'CLImage' with one channel per pixel.
 type CLImage1 = CLImage OneChan
 
