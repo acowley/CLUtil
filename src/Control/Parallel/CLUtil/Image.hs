@@ -51,6 +51,12 @@ data NumChan = OneChan | TwoChan | ThreeChan | FourChan
 -- type.
 data HalfFloat
 
+instance Storable HalfFloat where
+  sizeOf _ = error "HalfFloat is uninhabited"
+  alignment _ = error "HalfFloat is uninhabited"
+  peek _ = error "HalfFloat is uninhabited"
+  poke _ _ = error "HalfFloat is uninhabited"
+
 -- | A type corresponding to OpenCL's normalized signed 8-bit
 -- integer. Values of this type are represented in Haskell as 'Int8',
 -- but in an OpenCL kernel will take on values between zero and one.
