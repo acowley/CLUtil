@@ -16,15 +16,13 @@ module Control.Parallel.CLUtil.Image (
   readImage', readImage, readImageAsync', readImageAsync, 
   writeImage, writeImageAsync,
   copyImageAsync, copyImage,
-  
-  -- * Efficient access to image contents
+
+    -- * Efficient access to image contents
   withImage, withImageAsync, withImageRW, withImageRWAsync
   ) where
 import Control.Applicative ((<$>), (<$))
-import Control.Concurrent (forkIO)
-import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (evaluate)
-import Control.Monad (when, void)
+import Control.Monad (when)
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
 import Data.Foldable (Foldable)
@@ -36,7 +34,6 @@ import qualified Data.Vector.Storable.Mutable as VM
 import Data.Word (Word8, Word16, Word32)
 import Foreign.C.Types (CFloat, CInt)
 import Foreign.ForeignPtr (newForeignPtr_)
-import Foreign.Marshal.Utils (copyBytes)
 import Foreign.Ptr (castPtr, nullPtr)
 import Foreign.Storable (Storable(..))
 import Control.Parallel.CLUtil.Async
@@ -357,13 +354,14 @@ initImage_ flags = initImageFmt_ flags fmt
 -- want to upload RGBA pixels to a 2D image, you must provide a
 -- 'Vector CFloat' of length @4 * imageWidth * imageHeight@.
 writeImageAsync :: forall n a. (Storable a, ChanSize n)
-                => CLImage n a -> V.Vector a -> CL (CLAsync ())
-writeImageAsync (CLImage dims@(w,h,d) mem) v = 
+                => CLImage n a -> V.Vector a -> Blockers -> CL (CLAsync ())
+writeImageAsync (CLImage dims@(w,h,d) mem) v bs =
   do q <- clQueue <$> ask
      when (w*h*d*numChan (Proxy::Proxy n) /= V.length v)
           (throwError "Vector length is not equal to image dimensions!")
      ev <- liftIO . V.unsafeWith v $ \ptr ->
-             clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr) []
+             clEnqueueWriteImage q mem True (0,0,0) dims 0 0 (castPtr ptr)
+                                 (getBlockers bs)
      return . clAsync ev $ return ()
 
 -- | Perform a blocking write of a 'Vector''s contents to an
@@ -436,8 +434,9 @@ readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 -- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
 -- working with asynchronous computations.
 readImageAsync :: (Storable a, ChanSize n)
-               => CLImage n a -> CL (CLAsync (V.Vector a))
-readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
+               => CLImage n a -> Blockers -> CL (CLAsync (V.Vector a))
+readImageAsync img@(CLImage dims _) =
+  readImageAsync' img (0,0,0) dims . getBlockers
 
 -- | Provides access to a memory-mapped 'VM.MVector' of a
 -- 'CLImage'. The result of applying the given function to the vector

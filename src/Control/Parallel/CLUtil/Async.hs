@@ -9,14 +9,14 @@
 -- accumulate these promised results and to represent the results.
 module Control.Parallel.CLUtil.Async 
   (HList(..), (<+>), (++), (&:), singAsync, waitReleaseEvent,
-   waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync,
-   clAsync, ioAsync, sequenceAsync) where
+   waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync(..),
+   clAsync, sequenceAsync,
+   Blockers, blocker, getBlockers, releaseBlockers) where
 import Control.Applicative
 import Control.Arrow (first)
 import Control.Parallel.OpenCL
 import Control.Parallel.CLUtil.CL
 import Data.Monoid
-import Foreign.Ptr (nullPtr)
 
 -- | A basic heterogenous list type.
 data HList :: [*] -> * where
@@ -26,8 +26,29 @@ infixr 5 :&
 
 -- | A 'CLEvent' that will fire when the result of an associated 'CL'
 -- computation is ready.
--- type CLAsync a = ([CLEvent], CL a)
-type CLAsync a = ([IO ()], CL a)
+newtype CLAsync a = CLAsync { getCLAsync :: ([CLEvent], CL a) }
+
+-- | Require that a kernel invocation wait until some set of
+-- previously-started operations have finished.
+type Blockers = CLAsync ()
+
+blocker :: CLEvent -> Blockers
+blocker = flip clAsync (return ())
+
+getBlockers :: Blockers -> [CLEvent]
+getBlockers = fst . getCLAsync
+
+-- | Wait for and release 'Blockers'
+releaseBlockers :: Blockers -> IO ()
+releaseBlockers bs = let evs = getBlockers bs
+                     in clWaitForEvents evs >> mapM_ clReleaseEvent evs
+
+instance Monoid (CLAsync ()) where
+  mempty = CLAsync ([], return ())
+  mappend = sequenceAsync
+
+instance Functor CLAsync where
+  fmap f (CLAsync x) = CLAsync $ fmap (fmap f) x
 
 -- | Wait for an event, then immediately release it, decrementing its
 -- reference count.
@@ -36,15 +57,11 @@ waitReleaseEvent ev = clWaitForEvents [ev] >> clReleaseEvent ev >> return ()
 
 -- | Constructor for a simple, single event 'CLAsync'.
 clAsync :: CLEvent -> CL a -> CLAsync a
-clAsync = (,) . pure . waitReleaseEvent
-
--- | Make a 'CLAsync' that waits for an opaque 'IO' action.
-ioAsync :: IO () -> CL a -> CLAsync a
-ioAsync = (,) . pure
+clAsync ev m = CLAsync ([ev], m)
 
 -- | Sequence two 'CLAsync's, returning the result of the second.
 sequenceAsync :: CLAsync () -> CLAsync b -> CLAsync b
-sequenceAsync (ev1, r1) (ev2, r2) = (ev1<>ev2, r1 >> r2)
+sequenceAsync (CLAsync (ev1, r1)) (CLAsync (ev2, r2)) = CLAsync (ev1<>ev2, r1 >> r2)
 
 -- | Helper for lifting 'HList''s cons operation into an
 -- 'Applicative'.
@@ -57,32 +74,30 @@ singAsync :: CL (CLAsync a) -> CL (HList '[CLAsync a])
 singAsync e = (:&) <$> e <*> pure HNil
 
 -- | Block until the results of all given 'CL' actions are ready. Each
--- action must produce the same type of value.
+-- action must produce the same type of value. Events are released.
 waitAll :: [CLAsync a] -> CL [a]
-waitAll = aux . first concat . unzip
-  where aux (evs,xs) = 
-          do liftIO $ sequence_ evs
-             -- okay "Waiting for events" $ clWaitForEvents evs
-             -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
-             sequence xs
+waitAll = aux . first concat . unzip . map getCLAsync
+  where aux (evs,xs) = do liftIO $ do _ <- clWaitForEvents evs
+                                      mapM_ clReleaseEvent evs
+                          sequence xs
 
 -- | Block until the results of all given 'CL' actions are ready, then
--- discard all of those results.
+-- discard all of those results. Events are released
 waitAll_ :: [CLAsync a] -> CL ()
-waitAll_ = aux . first concat . unzip
-  where aux (evs,xs) = do liftIO $ sequence_ evs
-                          -- okay "Waiting for events" $ clWaitForEvents evs
-                          -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
+waitAll_ = aux . first concat . unzip . map getCLAsync
+  where aux (evs,xs) = do liftIO $ do _ <- clWaitForEvents evs
+                                      mapM_ clReleaseEvent evs
                           sequence_ xs
 
 -- | Block until all the given 'CL' actions have finished. All actions
 -- are being run solely for their side effects. This specialization of
 -- 'waitAll_' is intended to help type inference determine the result
--- of kernel invocations.
+-- of kernel invocations. Events are released.
 waitAllUnit :: [CLAsync ()] -> CL ()
 waitAllUnit = waitAll_
 
--- | Block on a single asynchronous computation.
+-- | Block on a single asynchronous computation. The 'CLEvent' is
+-- released.
 waitOne :: CLAsync a -> CL a
 waitOne = fmap head . waitAll . (:[])
 
@@ -98,20 +113,20 @@ infixr 5 <+>
 
 type family MapSnd (as :: [*]) :: [*]
 type instance MapSnd '[] = '[]
-type instance MapSnd ((t,a) ': as) = a ': MapSnd as
+type instance MapSnd (CLAsync a ': as) = CL a ': MapSnd as
 
 type family Sequence (as :: [*]) :: [*]
 type instance Sequence '[] = '[]
 type instance Sequence (m a ': as) = a ': Sequence as
 
 class HasEvents rs where
-  getEvents :: HList rs -> [IO ()]
+  getEvents :: HList rs -> [CLEvent]
 
 instance HasEvents '[] where
   getEvents _ = []
 
 instance HasEvents ts => HasEvents (CLAsync a ': ts) where
-  getEvents ((e,_) :& xs) = e ++ getEvents xs
+  getEvents (CLAsync (e,_) :& xs) = e ++ getEvents xs
 
 class SequenceH ts where
   sequenceH :: HList ts -> CL (HList (Sequence (MapSnd ts)))
@@ -120,13 +135,13 @@ instance SequenceH '[] where
   sequenceH _ = pure HNil
 
 instance SequenceH ts => SequenceH (CLAsync a ': ts) where
-  sequenceH ((_,x) :& xs) = (:&) <$> x <*> sequenceH xs
+  sequenceH (CLAsync (_,x) :& xs) = (:&) <$> x <*> sequenceH xs
 
 -- | Block until the results of all given 'CL' actions are ready. Each
 -- action may produce a different type of value.
 waitAll' :: (SequenceH xs, HasEvents xs)
          => HList xs -> CL (HList (Sequence (MapSnd xs)))
-waitAll' xs = do liftIO $ sequence_ (getEvents xs)
-                 -- okay "Waiting for events" $ clWaitForEvents evs
-                 -- mapM_ (okay "Releasing event" . clReleaseEvent) evs
+waitAll' xs = do liftIO $ let evs = getEvents xs
+                          in do _ <- clWaitForEvents evs
+                                mapM_ clReleaseEvent evs
                  sequenceH xs
