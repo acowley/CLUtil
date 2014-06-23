@@ -74,7 +74,7 @@ readImageAsync' :: (Storable a, Storable (LinearChan n a), ChanSize n)
                 => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
                 -> CL (CLAsync (Vector (LinearChan n a)))
 readImageAsync' img origin region waitForIt = 
-  fmap (fmap unflatten) <$> I.readImageAsync' img origin region waitForIt
+  fmap unflatten <$> I.readImageAsync' img origin region waitForIt
 
 -- | @readImage' mem origin region events@ reads back a 'Vector' of
 -- the image @mem@ from coordinate @origin@ of size @region@
@@ -107,7 +107,8 @@ readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
 -- want to upload RGBA pixels to a 2D image, you must provide a
 -- 'Vector CFloat' of length @4 * imageWidth * imageHeight@.
 writeImageAsync :: (Storable a, Storable (LinearChan n a), ChanSize n)
-                => CLImage n a -> Vector (LinearChan n a) -> CL (CLAsync ())
+                => CLImage n a -> Vector (LinearChan n a) -> Blockers
+                -> CL (CLAsync ())
 writeImageAsync img = I.writeImageAsync img . flatten
 
 -- | Perform a blocking write of a 'Vector''s contents to an

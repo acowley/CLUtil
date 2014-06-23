@@ -8,7 +8,6 @@ import Control.Exception (evaluate)
 import Control.Monad (when)
 import Control.Monad.ST (ST)
 import Control.Monad.ST.Unsafe (unsafeSTToIO)
-import Data.IORef (newIORef, writeIORef, readIORef)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
 import Foreign.Marshal.Utils (copyBytes)
@@ -184,21 +183,19 @@ withSharedMVector v go =
 -- read-only, write-only, or read/write access to the 'VM.MVector'.
 withBufferAsync_ :: forall a r. Storable a
                  => [CLMapFlag] -> CLBuffer a
-                 -> (forall s. VM.MVector s a -> ST s r) -> CL (CLAsync r)
+                 -> (forall s. VM.MVector s a -> ST s r) -> CL (CL r)
 withBufferAsync_ flags (CLBuffer n mem) f =
   do q <- clQueue <$> ask
      liftIO $ 
        do done <- newEmptyMVar
-          res <- newIORef undefined
           _ <- forkIO $ do
                  (ev,ptr) <- clEnqueueMapBuffer q mem True flags 0 sz []
                  fp <- newForeignPtr_ $ castPtr ptr
                  x <- evaluate =<< (unsafeSTToIO . f
                                     $ VM.unsafeFromForeignPtr0 fp n)
                  clEnqueueUnmapMemObject q mem ptr [ev] >>= waitReleaseEvent
-                 writeIORef res x
-                 putMVar done ()
-          return $ ioAsync (takeMVar done) (liftIO $ readIORef res)
+                 putMVar done x
+          return $ (liftIO $ takeMVar done)
      -- liftIO $ do (ev, ptr) <- clEnqueueMapBuffer q mem False flags 0 sz []
      --             let go = do fp <- newForeignPtr_ $ castPtr ptr
      --                         x <- evaluate =<<
@@ -217,7 +214,7 @@ withBufferAsync_ flags (CLBuffer n mem) f =
 -- out.
 withBufferRWAsync :: Storable a
                   => CLBuffer a -> (forall s. VM.MVector s a -> ST s r)
-                  -> CL (CLAsync r)
+                  -> CL (CL r)
 withBufferRWAsync = withBufferAsync_ [CL_MAP_READ, CL_MAP_WRITE]
 
 -- | Provides read/write access to a memory-mapped 'VM.MVector' of a
@@ -227,7 +224,7 @@ withBufferRWAsync = withBufferAsync_ [CL_MAP_READ, CL_MAP_WRITE]
 -- out.
 withBufferRW :: Storable a
              => CLBuffer a -> (forall s. VM.MVector s a -> ST s r) -> CL r
-withBufferRW img f = withBufferRWAsync img f >>= waitOne
+withBufferRW img f = withBufferRWAsync img f >>= id
 
 -- | Provides read-only access to a memory-mapped 'V.Vector' of a
 -- 'CLBuffer'. The result of applying the given function to the vector
@@ -236,7 +233,7 @@ withBufferRW img f = withBufferRWAsync img f >>= waitOne
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out.
 withBufferAsync :: Storable a
-                => CLBuffer a -> (V.Vector a -> r) -> CL (CLAsync r)
+                => CLBuffer a -> (V.Vector a -> r) -> CL (CL r)
 withBufferAsync img f = 
   withBufferAsync_ [CL_MAP_READ] img (fmap f . V.unsafeFreeze)
 
@@ -247,4 +244,4 @@ withBufferAsync img f =
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out.
 withBuffer :: Storable a => CLBuffer a -> (V.Vector a -> r) -> CL r
-withBuffer img f = withBufferAsync img f >>= waitOne
+withBuffer img f = withBufferAsync img f >>= id
