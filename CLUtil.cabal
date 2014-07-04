@@ -28,6 +28,7 @@ Library
                        Control.Parallel.CLUtil.ProgramCache,
                        Control.Parallel.CLUtil.BufferImageInterop,
                        Control.Parallel.CLUtil.Async,
+                       Control.Parallel.CLUtil.Scratch,
                        Control.Parallel.CLUtil.State,
                        Control.Parallel.CLUtil.Load,
                        Control.Parallel.CLUtil.Initialization,
