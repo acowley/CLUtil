@@ -58,26 +58,26 @@ instance Storable HalfFloat where
 -- integer. Values of this type are represented in Haskell as 'Int8',
 -- but in an OpenCL kernel will take on values between zero and one.
 newtype NormInt8 = NormInt8 Int8
-  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+  deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
 -- | A type corresponding to OpenCL's normalized unsigned 8-bit
 -- integer. Values of this type are represented in Haskell as 'Word8',
 -- but in an OpenCL kernel will take on values between zero and one.
 newtype NormWord8 = NormWord8 Word8
-  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+  deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
 -- | A type corresponding to OpenCL's normalized signed 16-bit
 -- integer. Values of this type are represented in Haskell as 'Int16',
 -- but in an OpenCL kernel will take on values between zero and one.
 newtype NormInt16 = NormInt16 Int16
-  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+  deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
 -- | A type corresponding to OpenCL's normalized unsigned 16-bit
 -- integer. Values of this type are represented in Haskell as
 -- 'Word16', but in an OpenCL kernel will take on values between zero
 -- and one.
 newtype NormWord16 = NormWord16 Word16
-  deriving (Num, Show, Eq, Enum, Bounded, Ord, Storable)
+  deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
 -- |A @CLImage n a@ is an image with @n@ channels whose every
 -- component is of type @a@.
