@@ -1,4 +1,5 @@
-{-# LANGUAGE DataKinds, TypeFamilies, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE DataKinds, TypeFamilies, FlexibleContexts, ConstraintKinds,
+             ScopedTypeVariables #-}
 -- | Functions for working with OpenCL images where pixel formats are
 -- represented by "Linear" finite vector types on the Haskell side.
 module Control.Parallel.CLUtil.Image.Linear (
@@ -8,12 +9,16 @@ module Control.Parallel.CLUtil.Image.Linear (
   -- * Working with images
   readImage', readImageAsync', readImageAsync, readImage,
   writeImageAsync, writeImage,
+  -- * Buffer Image Interop
+  copyBufferToImage,
   -- * Working with vectors of pixels
   LinearChan
   ) where
 import Control.Applicative ((<$>))
 import Control.Parallel.CLUtil (CL)
 import Control.Parallel.CLUtil.Async
+import Control.Parallel.CLUtil.Buffer (CLBuffer)
+import qualified Control.Parallel.CLUtil.BufferImageInterop as B
 import Control.Parallel.CLUtil.Image hiding
   (readImage', readImageAsync', readImageAsync, readImage,
    initImageFmt, initImage, 
@@ -116,3 +121,9 @@ writeImageAsync img = I.writeImageAsync img . flatten
 writeImage :: (Storable a, Storable (LinearChan n a), ChanSize n)
            => CLImage n a -> Vector (LinearChan n a) -> CL ()
 writeImage img = I.writeImage img . flatten
+
+-- | Copy a buffer to an image where each buffere element is a vector
+-- that maps into a multi-channel pixel type.
+copyBufferToImage :: forall n a. CLBuffer (LinearChan n a) -> CLImage n a -> CL ()
+copyBufferToImage buf (CLImage dims obj) =
+  B.copyBufferToImage buf (CLImage dims obj :: CLImage1 a)
