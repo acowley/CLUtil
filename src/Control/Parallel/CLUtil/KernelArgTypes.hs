@@ -10,7 +10,7 @@ newtype OutputSize = Out Int
 
 -- |The number of global work items to enqueue. May be 1, 2, or 3D.
 data NumWorkItems = Work1D Int | Work2D Int Int | Work3D Int Int Int
-                    deriving (Eq,Show)
+                    deriving (Eq,Ord,Show)
 
 -- |Convert a 'NumWorkItems' into the format expected by
 -- "Control.Parallel.OpenCL".
