@@ -25,9 +25,7 @@ import Linear (V2(..))
 -- different size to the previous invocation, then the old output
 -- 'CLImage' is released, and a new one is allocated.
 scratchImage :: ValidImage d a => IO (CLImage d a -> CL (CLImage d a))
-scratchImage =
-  do r <- newIORef Nothing
-     return $ aux r
+scratchImage = aux <$> newIORef Nothing
   where aux r img =
           let (w,h,_) = imageDims img
               fresh = do x@(img',_) <- allocImageKey [CL_MEM_READ_WRITE] [w,h]
