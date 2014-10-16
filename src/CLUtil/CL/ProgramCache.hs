@@ -21,6 +21,7 @@ module CLUtil.CL.ProgramCache (
 
   -- * Kernels
   getKernel, getKernelFromSource, KernelArgsCL, runKernel, runKernelAsync,
+  HasCache,
 
   -- * Buffer Objects
   CLBuffer(..), R.allocBuffer, R.allocBufferKey,
@@ -46,19 +47,20 @@ module CLUtil.CL.ProgramCache (
 
   -- * OpenCL kernel arguments
   OutputSize(..), NumWorkItems(..), WorkGroup(..),
-  LocalMem(..), localFloat, localDouble, localInt, localWord32,
+  LocalMem(..), localFloat, localDouble, localInt, localWord32, vectorDup,
 
   -- * Re-exports for convenience
   module Control.Parallel.OpenCL, Vector, CInt, CFloat, Word8, Storable
   ) where
 import CLUtil.CL.Resource hiding (CL, CL', runCL, runCL', runCLIO,
                                   nestCL, runCLClean)
+import qualified CLUtil.CL as Base
 import qualified CLUtil.CL.Resource as R
 import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage, CL, runCL)
 import CLUtil.Load
 import CLUtil.State
 import Control.Applicative
-import Control.Lens (_2, (%~))
+import Control.Lens (_2, (%~), Lens', lens, use, (.=))
 import Control.Monad.IO.Class
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -67,6 +69,7 @@ import Control.Parallel.OpenCL
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import qualified Data.Vector.Storable as V
 
 -- | A kernel cache for a particular program file.
 type KCache = (String -> IO CLKernel, Map String CLKernel)
@@ -74,13 +77,19 @@ type KCache = (String -> IO CLKernel, Map String CLKernel)
 -- | A program cache.
 type Cache = Map String KCache
 
-type CL = StateT Cache R.CL
-type CL' m = (MonadState Cache m, R.CL' m)
+-- | Provide access to a 'Cache' value as part of some potentially
+-- larger state.
+class HasCache a where
+  cachel :: Lens' a Cache
 
-instance MonadState Cleanup CL where
-  get = lift get
-  put = lift put
-  state = lift . state
+instance HasCache Cache where
+  cachel = lens id (flip const)
+
+instance HasCache (a,Cache) where
+  cachel = _2
+
+type CL = StateT (R.Cleanup, Cache) Base.CL
+type CL' s m = (MonadState s m, HasCache s, R.CL' s m)
 
 -- | Initialize some mutable state for running OpenCL
 -- computations. This maintains a reference to a cache of loaded
@@ -96,10 +105,9 @@ clInitState dev =
                 >> ezRelease dev
          goCL :: CL a -> IO a
          goCL m = do (cleanSt, cacheSt) <- readIORef accState
-                     ((r,csh),cln) <- (runExceptT
+                     (r,(cln,csh)) <- (runExceptT
                                       . flip runReaderT dev
-                                      . flip runStateT cleanSt
-                                      $ runStateT m cacheSt)
+                                      $ runStateT m (cleanSt,cacheSt))
                                       >>= either error return
                      writeIORef accState (cln,csh)
                      return r
@@ -117,24 +125,26 @@ loadKernel' kName p@(mk, cache) =
 emptyCache :: Cache
 emptyCache = M.empty
 
-loadKernelAux :: (MonadState Cache m, MonadIO m, MonadReader OpenCLState m)
+loadKernelAux :: CL' s m
               => (String -> OpenCLState -> IO (String -> IO CLKernel))
               -> String -> String -> m CLKernel
 loadKernelAux prepProgram progName kerName =
-  do cache <- get
+  do cache <- use cachel
      (k,c) <- case M.lookup progName cache of
                 Nothing -> do mk <- ask >>= liftIO . prepProgram progName
                               loadKernel' kerName (mk, M.empty)
                 Just p -> loadKernel' kerName p
-     put $ M.insert progName c cache
+     cachel .= M.insert progName c cache
      return k
+
+-- * Cached Kernel Loads
 
 -- | Get a kernel given a program file name and a kernel name. If the
 -- kernel was already loaded, it is returned. If not, and the program
 -- was previously loaded, the loaded program is used to provide the
 -- requested kernel. If the program has not yet been loaded, it is
 -- loaded from the source file.
-getKernel :: (MonadState Cache m, MonadIO m, MonadReader OpenCLState m)
+getKernel ::  CL' s m
            => FilePath -> String -> m CLKernel
 getKernel = loadKernelAux $ flip loadProgramFile
 
@@ -143,15 +153,16 @@ getKernel = loadKernelAux $ flip loadProgramFile
 -- source was previously loaded, the loaded program is used to provide
 -- the requested kernel. If the program has not yet been loaded, it is
 -- loaded from the given source code.
-getKernelFromSource :: ( MonadState Cache m, MonadIO m
-                       , MonadReader OpenCLState m)
-                    => String -> String -> m CLKernel
+getKernelFromSource :: CL' s m => String -> String -> m CLKernel
 getKernelFromSource = loadKernelAux $ flip loadProgram
+
+-- * Running CL Actions
 
 -- | Run a 'CL' action with a given 'OpenCLState'. Any errors are
 -- raised by calling 'error'.
 runCL :: OpenCLState -> CL a -> IO (a, Cleanup)
-runCL s m = R.runCL s (evalStateT m emptyCache)
+runCL s m = Base.runCL s . fmap (fmap fst) $
+            runStateT m (R.newCleanup, emptyCache)
 
 -- | Run a 'CL' action in an environment with a fresh cleanup
 -- record. This lets the caller embed an action whose resource

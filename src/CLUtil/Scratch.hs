@@ -25,7 +25,7 @@ import Linear (V2(..))
 -- provided as input to the returned function is of a different size
 -- to the previous invocation, then the old output 'CLImage' is
 -- released, and a new one is allocated.
-scratchImage :: CL' m => ValidImage d a => IO (CLImage d a -> m (CLImage d a))
+scratchImage :: CL' s m => ValidImage d a => IO (CLImage d a -> m (CLImage d a))
 scratchImage = aux <$> newIORef Nothing
   where aux r img =
           let (w,h,_) = imageDims img
@@ -41,7 +41,7 @@ scratchImage = aux <$> newIORef Nothing
 -- | Similar to 'scratchImage' but returns /two/ scratch images. This
 -- is helpful if a processing stage is implemented in two passes
 -- that bounce back and forth (ping-pong).
-pingPongImage :: (ValidImage d a, CL' m)
+pingPongImage :: (ValidImage d a, CL' s m)
               => IO (CLImage d a -> m (V2 (CLImage d a)))
 pingPongImage = do p1 <- scratchImage
                    p2 <- scratchImage
