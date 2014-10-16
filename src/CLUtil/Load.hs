@@ -1,8 +1,8 @@
 -- | Utilities for loading OpenCL programs from source.
-module Control.Parallel.CLUtil.Load where
+module CLUtil.Load where
 import Control.Monad ((>=>))
 import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.State
+import CLUtil.State
 
 -- |Load program source using a previously initialized
 -- 'OpenCLState'. The returned function may be used to create

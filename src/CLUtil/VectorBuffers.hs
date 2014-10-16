@@ -1,7 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
--- |Utility functions for working with 'Vector's and OpenCL memory
--- buffers.
-module Control.Parallel.CLUtil.VectorBuffers where
+-- | Low-level utility functions for working with 'Vector's and OpenCL
+-- memory buffers. See "CLUtil.Buffer" for a higher level interface.
+module CLUtil.VectorBuffers where
+import CLUtil.State
+import Control.Parallel.OpenCL
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import qualified Data.Vector.Storable.Mutable as VM
@@ -9,8 +11,6 @@ import Foreign.ForeignPtr (newForeignPtr)
 import Foreign.Marshal.Alloc (mallocBytes, finalizerFree)
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable, sizeOf)
-import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.State
 
 -- |Fill an OpenCL memory buffer with a 'Vector'.
 vectorToBuffer :: forall a. Storable a => CLContext -> Vector a -> IO CLMem

@@ -1,8 +1,10 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, OverlappingInstances,
-             ForeignFunctionInterface #-}
+{-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances,
+             OverlappingInstances, ScopedTypeVariables, UndecidableInstances #-}
+
+-- , ForeignFunctionInterface -}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
-module Control.Parallel.CLUtil.KernelArgsCL (KernelArgsCL, runKernel) where
+module CLUtil.KernelArgsCL (KernelArgsCL, runKernel) where
 import Control.Applicative
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
@@ -12,11 +14,11 @@ import Foreign.Concurrent (newForeignPtr)
 import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
 import Foreign.Ptr (nullPtr, Ptr)
 import Foreign.Storable (Storable(..))
-import Control.Parallel.CLUtil.KernelArgTypes 
-import Control.Parallel.CLUtil.State
-import Control.Parallel.CLUtil.VectorBuffers
+import CLUtil.CL
+import CLUtil.KernelArgTypes 
+import CLUtil.State
+import CLUtil.VectorBuffers
 import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.CL
 
 -- NOTE: This is adapted from KernelArgsCPS. The only change is to
 -- push the use of the 'OpenCLState' value to final kernel execution
@@ -101,7 +103,7 @@ runCPS outputSizes s k n wg prep =
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
-instance KernelArgsCL (CL ()) where
+instance CL' m => KernelArgsCL (m ()) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o,cleanup) <- runCPS [] s k n wg prep
@@ -111,7 +113,7 @@ instance KernelArgsCL (CL ()) where
 
 -- Execute a kernel where the calling context is expecting a single
 -- 'Vector' return value.
-instance forall a. (Storable a) => KernelArgsCL (CL (Vector a)) where
+instance forall a m. (Storable a, CL' m) => KernelArgsCL (m (Vector a)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o,cleanup) <- runCPS [sizeOf (undefined::a)] s k n wg prep
@@ -125,8 +127,8 @@ instance forall a. (Storable a) => KernelArgsCL (CL (Vector a)) where
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance forall a b. (Storable a, Storable b) => 
-  KernelArgsCL (CL (Vector a, Vector b)) where
+instance forall a b m. (Storable a, Storable b, CL' m) => 
+  KernelArgsCL (m (Vector a, Vector b)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o, cleanup) <- runCPS [sizeOf (undefined::a), sizeOf (undefined::b)]
@@ -142,8 +144,8 @@ instance forall a b. (Storable a, Storable b) =>
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance forall a b c. (Storable a, Storable b, Storable c) => 
-  KernelArgsCL (CL (Vector a, Vector b, Vector c)) where
+instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) => 
+  KernelArgsCL (m (Vector a, Vector b, Vector c)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s -> 
     liftIO $ do
       (o, cleanup) <- runCPS [ sizeOf (undefined::a)

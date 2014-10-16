@@ -1,17 +1,18 @@
+{-# LANGUAGE ConstraintKinds, FlexibleContexts #-}
 -- | Utilities for working with 'CLBuffer's and 'CLImage's together.
-module Control.Parallel.CLUtil.BufferImageInterop where
-import Control.Parallel.CLUtil.State (clQueue)
-import Control.Parallel.CLUtil.Buffer (CLBuffer(..))
-import Control.Parallel.CLUtil.CL (CL, ask, throwError, liftIO)
-import Control.Parallel.CLUtil.Image (CLImage(..), CLImage1)
-import Control.Parallel.CLUtil.Async
+module CLUtil.BufferImageInterop where
+import CLUtil.State (clQueue)
+import CLUtil.Buffer (CLBuffer(..))
+import CLUtil.CL (CL', ask, throwError, liftIO)
+import CLUtil.Image (CLImage(..), CLImage1)
+import CLUtil.Async
 import Control.Parallel.OpenCL
 
 -- | Copy the contents of a 'CLBuffer' to a 'CLImage1' of the same
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Returns a
 -- 'CLEvent' that may be waited upon for the copy operation to finish.
-copyBufferToImageAsync :: CLBuffer a -> CLImage1 b -> CL (CLAsync ())
+copyBufferToImageAsync :: CL' m => CLBuffer a -> CLImage1 b -> m (CLAsync ())
 copyBufferToImageAsync (CLBuffer bufLen bufObj) (CLImage imgDims imgObj)
   | bufLen /= dimProd = throwError "Buffer is not the same size as image"
   | otherwise = flip clAsync (return ()) `fmap`
@@ -23,14 +24,14 @@ copyBufferToImageAsync (CLBuffer bufLen bufObj) (CLImage imgDims imgObj)
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Blocks until the
 -- copy operation is complete.
-copyBufferToImage :: CLBuffer a -> CLImage1 b -> CL ()
+copyBufferToImage :: CL' m => CLBuffer a -> CLImage1 b -> m ()
 copyBufferToImage buf img = copyBufferToImageAsync buf img >>= waitOne
 
 -- | Copy the contents of a 'CLImage' to a 'CLBuffer' of the same
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Returns a
 -- 'CLEvent' that may be waited upon for the copy operation to finish.
-copyImageToBufferAsync :: CLImage1 a -> CLBuffer a -> CL (CLAsync ())
+copyImageToBufferAsync :: CL' m => CLImage1 a -> CLBuffer a -> m (CLAsync ())
 copyImageToBufferAsync (CLImage imgDims imgObj) (CLBuffer bufLen bufObj)
   | dimProd /= bufLen = throwError "Buffer is not the same size as image"
   | otherwise = flip clAsync (return ()) `fmap`
@@ -42,5 +43,5 @@ copyImageToBufferAsync (CLImage imgDims imgObj) (CLBuffer bufLen bufObj)
 -- element type. An error is raised if the 'CLBuffer''s size is
 -- different than the total size of the 'CLImage1'. Blocks until the
 -- copy operation is complete.
-copyImageToBuffer :: CLImage1 a -> CLBuffer a -> CL ()
+copyImageToBuffer :: CL' m => CLImage1 a -> CLBuffer a -> m ()
 copyImageToBuffer img buf = copyImageToBufferAsync img buf >>= waitOne

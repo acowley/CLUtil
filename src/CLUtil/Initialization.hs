@@ -1,8 +1,8 @@
 -- | Simple device initialization and release.
-module Control.Parallel.CLUtil.Initialization where
+module CLUtil.Initialization where
 import Control.Monad (void)
 import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.State
+import CLUtil.State
 import Data.Traversable (traverse)
 import Foreign.Ptr (nullPtr)
 

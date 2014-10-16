@@ -1,46 +1,38 @@
-{-# LANGUAGE FlexibleContexts, ImpredicativeTypes, RankNTypes, TemplateHaskell,
-             TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE ConstraintKinds, FlexibleContexts, ImpredicativeTypes, RankNTypes,
+             TemplateHaskell, TypeSynonymInstances, FlexibleInstances #-}
 -- | A monad transformer stack for working with OpenCL. Includes a
 -- lightweight resource management layer in the style of the
 -- @resourcet@ package.
-module Control.Parallel.CLUtil.CL 
-  (-- * Running OpenCL computations
-   CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL, clInitState,
-   -- * Operations in the @CL@ monad
-   ask, throwError, liftIO, okay, getKernel, getKernelFromSource,
-   -- * Managing resources
-   registerCleanup, unregisterCleanup, runCleanup, cleanupAll, ReleaseKey,
+module CLUtil.CL 
+  (CL, runCL, CL', ask, throwError, liftIO,
    -- * Releasable objects and CLMem wrappers
-   CLReleasable(..), HasCLMem(..),
-   -- * Internal types
-   Cleanup(..), CLState(..), clCleanup, clCache
+   HasCLMem(..)
   ) where
-import Control.Applicative
-import Control.Lens
-import Control.Monad.Error (ErrorT(..))
-import Control.Monad.Error.Class (MonadError, throwError)
+import CLUtil.State (OpenCLState)
+import Control.Applicative (Applicative)
+import Control.Monad.Except
 import Control.Monad.Reader
-import Control.Monad.State
-import qualified Control.Parallel.CLUtil.ProgramCache as C
-import Control.Parallel.CLUtil.Initialization (ezRelease)
-import Control.Parallel.CLUtil.State (OpenCLState)
-import Control.Parallel.OpenCL (CLKernel, CLMem)
-import Data.Foldable (sequenceA_)
-import Data.IntMap.Strict (IntMap)
-import qualified Data.IntMap.Strict as IM
-import Data.IORef
-import Data.Monoid
+import Control.Parallel.OpenCL (CLMem)
 
--- | Release resources used by OpenCL.
-data Cleanup = Cleanup { _nextReleaseKey :: !Int
-                       , _releaseMap     :: !(IntMap (IO ()))  }
-makeLenses ''Cleanup
+-- | A class for things that wrap a 'CLMem' object.
+class HasCLMem a where
+  getCLMem :: a -> CLMem
 
-type ReleaseKey = Int
+instance HasCLMem CLMem where
+  getCLMem = id
 
-newCleanup :: Cleanup
-newCleanup = Cleanup 0 mempty
+type CL = ReaderT OpenCLState (ExceptT String IO)
 
+-- | A constraint corresponding to features supported by 'CL'.
+type CL' m = (MonadReader OpenCLState m, MonadError String m,
+              MonadIO m, Functor m, Applicative m)
+
+-- | Run a 'CL' action with a given 'OpenCLState'. Any errors are
+-- raised by calling 'error'.
+runCL :: OpenCLState -> CL a -> IO a
+runCL s m = runExceptT (runReaderT m s) >>= either error return
+
+{-
 -- | This is a somewhat dangerous 'Monoid' instance. If you have two
 -- independently created 'Cleanup' values, and you have held on to
 -- 'ReleaseKey's for specific resources, then combining 'Cleanup'
@@ -196,9 +188,4 @@ class CLReleasable a where
   -- | Decrement the reference count of a memory object.
   releaseObject :: a -> IO Bool
 
--- | A class for things that wrap a 'CLMem' object.
-class HasCLMem a where
-  getCLMem :: a -> CLMem
-
-instance HasCLMem CLMem where
-  getCLMem = id
+-}
