@@ -49,7 +49,7 @@ module CLUtil (
 
   -- * OpenCL kernel arguments
   OutputSize(..), NumWorkItems(..), WorkGroup(..),
-  LocalMem(..), localFloat, localDouble, localInt, localWord32,
+  LocalMem(..), localFloat, localDouble, localInt, localWord32, vectorDup,
 
   -- * Re-exports for convenience
   module Control.Parallel.OpenCL, Vector, CInt, CFloat, Word8, Storable

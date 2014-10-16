@@ -10,6 +10,7 @@ import Control.Monad (void, when)
 import Data.Either (partitionEithers)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable.Mutable as VM
 import Foreign.Concurrent (newForeignPtr)
 import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
 import Foreign.Ptr (nullPtr, Ptr)
@@ -65,8 +66,8 @@ type PrepExec = PrepCont -> IO [PostExec]
 
 -- Wrap an output buffer in a 'Vector'.
 mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
-mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr 
-                   <$> getPtr
+mkRead (getPtr,num) = flip V.unsafeFromForeignPtr0 num . castForeignPtr
+                      <$> getPtr
 
 -- | Implementation of a variable arity technique similar to
 -- "Text.Printf".
@@ -207,10 +208,10 @@ bufferFinalizer q b p = do clEnqueueUnmapMemObject q b p [] >>=
 -- OpenCL buffers.
 instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
   setArgCL k arg n wg prep = 
-    \(Out m) -> 
+    \(Out m) ->
       let load cont = cont allocateOutput
           allocateOutput _ [] = error "Couldn't determine output element size"
-          allocateOutput s (sz:szs) = 
+          allocateOutput s (sz:szs) =
             do b <- clCreateBuffer (clContext s)
                                    [ CL_MEM_WRITE_ONLY
                                    , CL_MEM_ALLOC_HOST_PTR ]
@@ -222,9 +223,9 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
                let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
                                                             True [CL_MAP_READ]
                                                             0 (m*sz) [] 
+                               clWaitForEvents [ev]
                                void $ clReleaseEvent ev
-                               -- clWaitForEvents [ev]
-                               newForeignPtr p $ bufferFinalizer (clQueue s) b p 
+                               newForeignPtr p $ bufferFinalizer (clQueue s) b p
                    finishOutput = return (getPtr,m)
                return (Just $ ReadOutput finishOutput, szs) 
       in setArgCL k (arg+1) n wg (load:prep)
@@ -235,5 +236,10 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
 -- improving performance of kernels run on the CPU.
 -- 
 -- > (v1,v2) <- runKernel kernel vIn (Work1D 4) (Out 4) (Out 4)
+--
+-- Note that a 'Vector' returned by using an output parameter
+-- (configured with an 'OutputSize' value) wraps memory allocated by
+-- OpenCL. If you want to release your OpenCL context, but hold on to
+-- such a 'Vector', copy its contents with 'vectorDup'.
 runKernel :: KernelArgsCL a => CLKernel -> a
 runKernel k = setArgCL k 0 Nothing Nothing []

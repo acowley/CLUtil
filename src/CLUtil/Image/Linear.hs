@@ -55,7 +55,7 @@ unflatten = V.unsafeCast
 -- cleanup.
 initImageFmtRes :: (Integral a, F.Foldable f, Functor f,
                     Storable b, Storable (LinearChan n b), 
-                    ValidImage n b, Res.CL' m)
+                    ValidImage n b, Res.CL' s m)
                 => [CLMemFlag] -> CLImageFormat -> f a -> Vector (LinearChan n b)
                 -> m (CLImage n b)
 initImageFmtRes flags fmt dims =
@@ -88,7 +88,7 @@ initImage flags dims = I.initImage flags dims . flatten
 -- type. See 'initImage'' for more information on requirements of the
 -- input 'Vector'. The image is registered for cleanup.
 initImageRes :: (Integral a, F.Foldable f, Functor f, ValidImage n b,
-                 Storable b, Storable (LinearChan n b), Res.CL' m)
+                 Storable b, Storable (LinearChan n b), Res.CL' s m)
              => [CLMemFlag] -> f a -> Vector (LinearChan n b) -> m (CLImage n b)
 initImageRes flags dims = Res.initImage flags dims . flatten
 

@@ -2,11 +2,27 @@
 -- with asynchronous execution.
 module CLUtil.KernelArgTypes where
 import Control.Parallel.OpenCL
+import qualified Data.Vector.Storable as V
+import qualified Data.Vector.Storable.Mutable as VM
 import Data.Word
 
--- |A vector that will be written to. The parameter is the number of
--- elements in the vector.
+-- | A vector that will be written to by an OpenCL kernel. The
+-- parameter is the number of elements in the vector. /NOTE/: The
+-- resultant 'V.Vector' produced by 'CLUtil.KernelArgsCL.runKernel'
+-- will wrap memory allocated by OpenCL. If you release the OpenCL
+-- device (and its associated buffers), things will go sideways. In
+-- the case when you want to cleanup an OpenCL context, but hold on to
+-- a 'V.Vector' created by an 'OutputSize' kernel parameter, copy the
+-- 'V.Vector' with 'vectorDup'.
 newtype OutputSize = Out Int
+
+-- | Copy the a 'V.Vector': This must be done if you want to release
+-- an OpenCL context, but hold on to a result returned by using
+-- 'OutputSize' as a parameter to 'CLUtil.KernelArgsCL.runKernel'.
+vectorDup :: V.Storable a => V.Vector a -> IO (V.Vector a)
+vectorDup v = do v' <- VM.new (V.length v)
+                 V.unsafeCopy v' v
+                 V.unsafeFreeze v'
 
 -- |The number of global work items to enqueue. May be 1, 2, or 3D.
 data NumWorkItems = Work1D Int | Work2D Int Int | Work3D Int Int Int
