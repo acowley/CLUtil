@@ -2,11 +2,17 @@
              ForeignFunctionInterface, OverlappingInstances, TupleSections #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
-module Control.Parallel.CLUtil.KernelArgsCLAsync 
+module CLUtil.KernelArgsCLAsync 
   (KernelArgsCL, runKernelAsync) where
+import CLUtil.Async
+import CLUtil.CL
+import CLUtil.KernelArgTypes 
+import CLUtil.State
+import CLUtil.VectorBuffers
 import Control.Applicative
 import Control.Arrow (second)
 import Control.Monad (void, when)
+import Control.Parallel.OpenCL
 import Data.Either (partitionEithers)
 import Data.Monoid
 import Data.Vector.Storable (Vector)
@@ -15,12 +21,6 @@ import Foreign.Concurrent (newForeignPtr)
 import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
 import Foreign.Ptr (nullPtr, Ptr)
 import Foreign.Storable (Storable(..))
-import Control.Parallel.CLUtil.KernelArgTypes 
-import Control.Parallel.CLUtil.State
-import Control.Parallel.CLUtil.VectorBuffers
-import Control.Parallel.OpenCL
-import Control.Parallel.CLUtil.Async
-import Control.Parallel.CLUtil.CL
 
 -- NOTE: This is adapted from KernelArgsCPS. The only change is to
 -- push the use of the 'OpenCLState' value to final kernel execution

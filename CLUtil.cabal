@@ -1,7 +1,22 @@
 Name:                CLUtil
-Version:             0.7.1
+Version:             0.8
 Synopsis:            A thin abstraction layer over the OpenCL library.
-Description:         Medium level abstractions for working with OpenCL. OpenCL kernels are still written in the OpenCL language, but interfacing with Haskell types is simplified and the most common uses are streamlined.
+
+Description: Medium level abstractions for working with OpenCL. OpenCL
+             kernels are still written in the OpenCL language, but
+             interfacing with Haskell types is simplified and the most
+             common uses are streamlined.
+             .
+             OpenCL state may be encapsulated in a variety of monadic
+             context.s The simplest context, a basic @ReaderT IO@, may
+             be found in the "CLUtil.CL" module, and is also exported
+             by the "CLUtil" module. A context that tracks resource
+             allocations so that they may be freed when you are done
+             with them is provided in "CLUtil.CL.Resource". A context
+             that, in addition to the previous two features, also
+             caches OpenCL kernels loaded from files is provided in
+             "CLUtil.CL.ProgramCache".
+
 Homepage:            http://github.com/acowley/CLUtil
 License:             BSD3
 License-file:        LICENSE
@@ -9,31 +24,34 @@ Author:              Anthony Cowley
 Maintainer:          acowley@gmail.com
 Category:            System
 Build-type:          Simple
-Cabal-version:       >=1.2
+Cabal-version:       >=1.10
 
 Extra-Source-Files: examples/QuasiCrystalDisplay.hs, 
                     examples/QuasiCrystalRGBA.cl,
                     examples/TestEZ.hs,
                     examples/VecEZ.cl,
-                    examples/VecEZ2.cl
+                    examples/VecEZ2.cl,
+                    examples/CLMonad.hs,
+                    examples/VecAdd.cl
 
 Library
-  Exposed-modules:     Control.Parallel.CLUtil,
-                       Control.Parallel.CLUtil.CL,
-                       Control.Parallel.CLUtil.Buffer,
-                       Control.Parallel.CLUtil.Image,
-                       Control.Parallel.CLUtil.Image.Linear,
-                       Control.Parallel.CLUtil.KernelArgsCL,
-                       Control.Parallel.CLUtil.KernelArgsCLAsync,
-                       Control.Parallel.CLUtil.ProgramCache,
-                       Control.Parallel.CLUtil.BufferImageInterop,
-                       Control.Parallel.CLUtil.Async,
-                       Control.Parallel.CLUtil.Scratch,
-                       Control.Parallel.CLUtil.State,
-                       Control.Parallel.CLUtil.Load,
-                       Control.Parallel.CLUtil.Initialization,
-                       Control.Parallel.CLUtil.VectorBuffers,
-                       Control.Parallel.CLUtil.KernelArgTypes
+  Exposed-modules:     CLUtil,
+                       CLUtil.CL,
+                       CLUtil.CL.ProgramCache,
+                       CLUtil.CL.Resource,
+                       CLUtil.Buffer,
+                       CLUtil.Image,
+                       CLUtil.Image.Linear,
+                       CLUtil.KernelArgsCL,
+                       CLUtil.KernelArgsCLAsync,
+                       CLUtil.BufferImageInterop,
+                       CLUtil.Async,
+                       CLUtil.Scratch,
+                       CLUtil.State,
+                       CLUtil.Load,
+                       CLUtil.Initialization,
+                       CLUtil.VectorBuffers,
+                       CLUtil.KernelArgTypes
   HS-Source-Dirs:      src
   Build-depends:       base >= 4.6,
                        bytestring,
@@ -42,8 +60,15 @@ Library
                        linear >= 1.3.1,
                        mtl,
                        tagged >= 0.6.1,
-                       transformers >= 0.3,
+                       transformers >= 0.4,
                        vector >= 0.7,
                        OpenCL >= 1.0.3
+  default-language:    Haskell2010
 
-                       
+test-suite tests
+  type:             exitcode-stdio-1.0
+  main-is:          UnitTests.hs
+  default-language: Haskell2010
+  ghc-options:      -Wall
+  hs-source-dirs:   examples
+  build-depends:    base, vector, CLUtil, tasty, tasty-hunit

@@ -1,6 +1,6 @@
 -- |Types used for passing arguments to OpenCL kernels, and dealing
 -- with asynchronous execution.
-module Control.Parallel.CLUtil.KernelArgTypes where
+module CLUtil.KernelArgTypes where
 import Control.Parallel.OpenCL
 import Data.Word
 
