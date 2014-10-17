@@ -275,13 +275,14 @@ allocBuffer flags n = fst <$> allocBufferKey flags n
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is registered for cleanup, and the key used to
 -- perform an early cleanup of the buffer is returned.
-initBufferKey :: Storable a
-              => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a, ReleaseKey)
+initBufferKey :: (Storable a, CL' s m)
+              => [CLMemFlag] -> V.Vector a -> m (CLBuffer a, ReleaseKey)
 initBufferKey flags v = do b <- B.initBuffer flags v
                            k <- registerCleanup $ () <$ releaseObject b
                            return (b,k)
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is registered for cleanup.
-initBuffer :: Storable a => [CLMemFlag] -> V.Vector a -> CL (CLBuffer a)
+initBuffer :: (Storable a, CL' s m)
+           => [CLMemFlag] -> V.Vector a -> m (CLBuffer a)
 initBuffer flags v = fst <$> initBufferKey flags v
