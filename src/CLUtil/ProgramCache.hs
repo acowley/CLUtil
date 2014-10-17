@@ -13,7 +13,7 @@ module CLUtil.ProgramCache (
   ezRelease, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, runCL, runCL', runCLIO, runCLClean, nestCL, clInitState,
+  CL, CL', runCL, runCL', runCLIO, runCLClean, nestCL, clInitState,
 
   -- * Mangaging images and buffers
   HasCLMem(getCLMem), Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
