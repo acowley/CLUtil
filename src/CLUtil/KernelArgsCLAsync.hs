@@ -1,5 +1,6 @@
-{-# LANGUAGE ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving,
-             OverlappingInstances, TupleSections #-}
+{-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances,
+             GeneralizedNewtypeDeriving, OverlappingInstances,
+             ScopedTypeVariables, TupleSections, UndecidableInstances #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module CLUtil.KernelArgsCLAsync 
@@ -92,7 +93,7 @@ runCPS outputSizes s k n wg bs prep =
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
-instance KernelArgsCL (CL (CLAsync ())) where
+instance CL' m => KernelArgsCL (m (CLAsync ())) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
       (ev, (o,cleanup)) <- runCPS [] s k n wg bs prep
@@ -103,7 +104,8 @@ instance KernelArgsCL (CL (CLAsync ())) where
 
 -- Execute a kernel where the calling context is expecting a single
 -- 'Vector' return value.
-instance forall a. (Storable a) => KernelArgsCL (CL (CLAsync (Vector a))) where
+instance forall a m. (Storable a, CL' m) =>
+  KernelArgsCL (m (CLAsync (Vector a))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
       (ev, (o,cleanup)) <- runCPS [sizeOf (undefined::a)] s k n wg bs prep
@@ -117,8 +119,8 @@ instance forall a. (Storable a) => KernelArgsCL (CL (CLAsync (Vector a))) where
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance forall a b. (Storable a, Storable b) => 
-  KernelArgsCL (CL (CLAsync (Vector a, Vector b))) where
+instance forall a b m. (Storable a, Storable b, CL' m) => 
+  KernelArgsCL (m (CLAsync (Vector a, Vector b))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
       (ev, (o, cleanup)) <- runCPS [sizeOf (undefined::a), sizeOf (undefined::b)]
@@ -134,8 +136,8 @@ instance forall a b. (Storable a, Storable b) =>
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance forall a b c. (Storable a, Storable b, Storable c) => 
-  KernelArgsCL (CL (CLAsync (Vector a, Vector b, Vector c))) where
+instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) => 
+  KernelArgsCL (m (CLAsync (Vector a, Vector b, Vector c))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s -> 
     liftIO $ do
       (ev, (o, cleanup)) <- runCPS [ sizeOf (undefined::a)
