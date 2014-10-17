@@ -1,7 +1,5 @@
 {-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances,
              OverlappingInstances, ScopedTypeVariables, UndecidableInstances #-}
-
--- , ForeignFunctionInterface -}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module CLUtil.KernelArgsCL (KernelArgsCL, runKernel) where

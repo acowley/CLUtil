@@ -1,5 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables, FlexibleInstances, GeneralizedNewtypeDeriving,
-             ForeignFunctionInterface, OverlappingInstances, TupleSections #-}
+             OverlappingInstances, TupleSections #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module CLUtil.KernelArgsCLAsync 
