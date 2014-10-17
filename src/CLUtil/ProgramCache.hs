@@ -7,7 +7,7 @@
 -- overlapped resource usage (i.e. programs or kernels). Instead,
 -- initializers may independently use 'getKernel' without worrying if
 -- a program or kernel has already been loaded by someone else.
-module CLUtil.CL.ProgramCache (
+module CLUtil.ProgramCache (
   -- * Initialization
   ezInit, clDeviceGPU, clDeviceCPU, clDeviceSelect,
   ezRelease, OpenCLState(..),
@@ -52,13 +52,13 @@ module CLUtil.CL.ProgramCache (
   -- * Re-exports for convenience
   module Control.Parallel.OpenCL, Vector, CInt, CFloat, Word8, Storable
   ) where
-import CLUtil.CL.Resource hiding (CL, CL', runCL, runCL', runCLIO,
-                                  nestCL, runCLClean)
+import CLUtil.Resource hiding (CL, CL', runCL, runCL', runCLIO,
+                               nestCL, runCLClean)
 import qualified CLUtil.CL as Base
-import qualified CLUtil.CL.Resource as R
-import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage, CL, runCL)
+import qualified CLUtil.Resource as R
+import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage,
+                      CL, CL', runCL)
 import CLUtil.Load
-import CLUtil.State
 import Control.Applicative
 import Control.Lens (_2, (%~), Lens', lens, use, (.=))
 import Control.Monad.IO.Class
@@ -69,7 +69,6 @@ import Control.Parallel.OpenCL
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import qualified Data.Vector.Storable as V
 
 -- | A kernel cache for a particular program file.
 type KCache = (String -> IO CLKernel, Map String CLKernel)

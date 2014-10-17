@@ -5,7 +5,7 @@
 module CLUtil.Image.Linear (
   module CLUtil.Image,
   -- * Initializing images
-  initImageFmt, initImage,
+  initImageFmt, initImage, initImageFmtRes, initImageRes,
   -- * Working with images
   readImage', readImageAsync', readImageAsync, readImage,
   writeImageAsync, writeImage,
@@ -23,8 +23,8 @@ import CLUtil.Image hiding
    initImageFmt, initImage, 
    writeImageAsync, writeImage)
 import qualified CLUtil.Image as I
-import CLUtil.CL (CL, CL')
-import qualified CLUtil.CL.Resource as Res
+import CLUtil.CL (CL')
+import qualified CLUtil.Resource as Res
 import Control.Parallel.OpenCL
 import qualified Data.Foldable as F
 import Data.Vector.Storable (Vector)

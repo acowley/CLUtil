@@ -7,7 +7,7 @@
 -- involve allocating OpenCL images and buffers, then returning 'IO'
 -- functions a caller can execute multiple times along with another
 -- 'IO' action that frees resources.
-module CLUtil.CL.Resource (
+module CLUtil.Resource (
   -- * Initialization
   ezInit, clDeviceGPU, clDeviceCPU, clDeviceSelect,
   ezRelease, OpenCLState(..),
@@ -66,28 +66,22 @@ module CLUtil.CL.Resource (
   newCleanup
 -}
   ) where
-import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage, CL, runCL)
-import CLUtil.Buffer hiding (allocBuffer, initBuffer)
+import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage,
+                      CL, CL', runCL)
 import qualified CLUtil.Buffer as B
 import qualified CLUtil.CL as R
 import CLUtil.Image hiding (allocImageFmt, allocImage, initImageFmt, initImage)
 import qualified CLUtil.Image as I
-import CLUtil.State
 import Control.Applicative
 import Control.Lens
-import Control.Monad.Except
-import Control.Monad.Reader
 import Control.Monad.State
 import Control.Parallel.OpenCL
 import Data.Foldable (Foldable, sequenceA_)
-import qualified Data.Foldable as F
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Monoid
 import Data.Proxy
 import qualified Data.Vector.Storable as V
-import Foreign.Ptr (castPtr)
-import Foreign.Storable (Storable)
 
 -- | Capture an 'OpenCLState' and track resource allocations.
 type CL = StateT Cleanup R.CL

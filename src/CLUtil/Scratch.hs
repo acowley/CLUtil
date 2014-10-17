@@ -3,10 +3,8 @@
 -- discussion of applicability.
 module CLUtil.Scratch where
 import Control.Applicative
-import Control.Monad.IO.Class (liftIO)
-import CLUtil.CL.Resource
+import CLUtil.Resource
 import CLUtil.Image (ValidImage)
-import Control.Parallel.OpenCL
 import Data.IORef
 import Data.Traversable (sequenceA)
 import Linear (V2(..))
