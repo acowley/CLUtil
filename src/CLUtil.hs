@@ -6,7 +6,7 @@ module CLUtil (
   ezRelease, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, runCL,
+  CL, CL', runCL,
   -- CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL, clInitState,
 
   -- * Mangaging images and buffers

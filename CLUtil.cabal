@@ -12,10 +12,10 @@ Description: Medium level abstractions for working with OpenCL. OpenCL
              be found in the "CLUtil.CL" module, and is also exported
              by the "CLUtil" module. A context that tracks resource
              allocations so that they may be freed when you are done
-             with them is provided in "CLUtil.CL.Resource". A context
+             with them is provided in "CLUtil.Resource". A context
              that, in addition to the previous two features, also
              caches OpenCL kernels loaded from files is provided in
-             "CLUtil.CL.ProgramCache".
+             "CLUtil.ProgramCache".
 
 Homepage:            http://github.com/acowley/CLUtil
 License:             BSD3
@@ -37,8 +37,8 @@ Extra-Source-Files: examples/QuasiCrystalDisplay.hs,
 Library
   Exposed-modules:     CLUtil,
                        CLUtil.CL,
-                       CLUtil.CL.ProgramCache,
-                       CLUtil.CL.Resource,
+                       CLUtil.ProgramCache,
+                       CLUtil.Resource,
                        CLUtil.Buffer,
                        CLUtil.Image,
                        CLUtil.Image.Linear,
