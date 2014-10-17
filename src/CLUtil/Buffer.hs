@@ -2,7 +2,7 @@
              TupleSections, RankNTypes #-}
 -- | Typed monadic interface for working with OpenCL buffers.
 module CLUtil.Buffer where
-import Control.Applicative ((<$>), (<$))
+import Control.Applicative ((<$>))
 import Control.Concurrent (forkIO)
 import Control.Concurrent.MVar (newEmptyMVar, putMVar, takeMVar)
 import Control.Exception (evaluate)

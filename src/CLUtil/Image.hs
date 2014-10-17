@@ -19,7 +19,7 @@ module CLUtil.Image (
     -- * Efficient access to image contents
   withImage, withImageAsync, withImageRW, withImageRWAsync
   ) where
-import Control.Applicative ((<$>), (<$))
+import Control.Applicative ((<$>))
 import Control.Exception (evaluate)
 import Control.Monad (when)
 import Control.Monad.ST (ST)

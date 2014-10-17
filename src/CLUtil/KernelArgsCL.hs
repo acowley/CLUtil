@@ -8,7 +8,6 @@ import Control.Monad (void, when)
 import Data.Either (partitionEithers)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
-import qualified Data.Vector.Storable.Mutable as VM
 import Foreign.Concurrent (newForeignPtr)
 import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
 import Foreign.Ptr (nullPtr, Ptr)
@@ -221,7 +220,7 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
                let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
                                                             True [CL_MAP_READ]
                                                             0 (m*sz) [] 
-                               clWaitForEvents [ev]
+                               _ <- clWaitForEvents [ev]
                                void $ clReleaseEvent ev
                                newForeignPtr p $ bufferFinalizer (clQueue s) b p
                    finishOutput = return (getPtr,m)

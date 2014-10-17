@@ -16,7 +16,7 @@ module CLUtil.Resource (
   CL, CL', runCL, runCL', runCLIO, runCLClean, nestCL,
 
   -- * Mangaging images and buffers
-  Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
+  HasCLMem(getCLMem), Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
   runCleanup, releaseItem, CLReleasable(releaseObject), newCleanup, HasCleanup,
 
   -- * Kernels

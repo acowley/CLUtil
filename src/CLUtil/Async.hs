@@ -16,7 +16,6 @@ import Control.Applicative
 import Control.Arrow (first)
 import Control.Monad.IO.Class
 import Control.Parallel.OpenCL
-import CLUtil.CL
 import Data.Monoid
 
 -- | A basic heterogenous list type.

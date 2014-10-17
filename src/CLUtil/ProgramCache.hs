@@ -16,8 +16,8 @@ module CLUtil.ProgramCache (
   CL, runCL, runCL', runCLIO, runCLClean, nestCL, clInitState,
 
   -- * Mangaging images and buffers
-  Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
-  runCleanup, releaseItem, releaseObject, HasCLMem(getCLMem),
+  HasCLMem(getCLMem), Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
+  runCleanup, releaseItem, releaseObject,
 
   -- * Kernels
   getKernel, getKernelFromSource, KernelArgsCL, runKernel, runKernelAsync,
@@ -56,8 +56,6 @@ import CLUtil.Resource hiding (CL, CL', runCL, runCL', runCLIO,
                                nestCL, runCLClean)
 import qualified CLUtil.CL as Base
 import qualified CLUtil.Resource as R
-import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage,
-                      CL, CL', runCL)
 import CLUtil.Load
 import Control.Applicative
 import Control.Lens (_2, (%~), Lens', lens, use, (.=))
