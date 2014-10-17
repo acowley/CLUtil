@@ -23,6 +23,9 @@ module CLUtil.ProgramCache (
   getKernel, getKernelFromSource, KernelArgsCL, runKernel, runKernelAsync,
   HasCache,
 
+  -- * Operations in the @CL@ monad
+  ask, throwError, liftIO,
+
   -- * Buffer Objects
   CLBuffer(..), R.allocBuffer, R.allocBufferKey,
   R.initBuffer, R.initBufferKey,
