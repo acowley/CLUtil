@@ -1,7 +1,7 @@
 -- | Examples where CLUtil allocates any needed output buffers.
 module TestEZ where
 import Control.Applicative
-import CLUtil.CL.ProgramCache
+import CLUtil.ProgramCache
 import qualified Data.Vector.Storable as V
 
 test1 :: IO (Vector Float)
