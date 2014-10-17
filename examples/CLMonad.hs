@@ -1,7 +1,7 @@
 module CLMonad where
 import Control.Applicative ((<$))
 import Control.Monad
-import CLUtil.CL.ProgramCache
+import CLUtil.ProgramCache
 import qualified Data.Vector.Storable as V
 
 -- Pre-allocate buffers for arguments and result.
