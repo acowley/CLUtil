@@ -7,11 +7,6 @@ module CLUtil (
 
   -- * Running OpenCL computations
   CL, CL', runCL,
-  -- CL, runCL, runCL', runCLIO, runCLError, runCLClean, nestCL, clInitState,
-
-  -- * Mangaging images and buffers
-  -- Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
-  -- runCleanup, cleanupAll, releaseObject, HasCLMem(getCLMem),
 
   -- * Managing images and buffers
   HasCLMem(getCLMem),
@@ -23,16 +18,11 @@ module CLUtil (
   ask, throwError, liftIO, -- okay,
 
   -- * Buffer Objects
-  -- CLBuffer(..), allocBuffer, allocBufferKey, allocBuffer_, 
-  -- initBuffer, initBufferKey, initBuffer_,
   CLBuffer(..), allocBuffer, initBuffer, 
   readBuffer, readBuffer', writeBuffer, withSharedVector, withSharedMVector,
 
   -- * Image Objects
   CLImage(..), allocImage, initImage,
-  -- CLImage(..), allocImage, allocImageKey, 
-  -- allocImageFmt, allocImage_, allocImageFmt_,
-  -- initImage, initImageKey, initImage_, initImageFmt, initImageFmt_,
   readImage, readImage', writeImage, copyImage,
   NumChan(..), HalfFloat, 
   NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
