@@ -23,7 +23,7 @@ module CLUtil.Resource (
   KernelArgsCL, runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
-  ask, throwError, liftIO, -- okay,
+  ask, throwError, liftIO,
 
   -- * Buffer Objects
   CLBuffer(..), allocBuffer, allocBufferKey, 
