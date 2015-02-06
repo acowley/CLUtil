@@ -3,7 +3,7 @@
 module CLUtil (
   -- * Initialization
   ezInit, clDeviceGPU, clDeviceCPU, clDeviceSelect,
-  ezRelease, OpenCLState(..),
+  ezRelease, clReleaseDevice, OpenCLState(..),
 
   -- * Running OpenCL computations
   CL, CL', runCL,
