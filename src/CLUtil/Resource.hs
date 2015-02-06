@@ -10,7 +10,7 @@
 module CLUtil.Resource (
   -- * Initialization
   ezInit, clDeviceGPU, clDeviceCPU, clDeviceSelect,
-  ezRelease, OpenCLState(..),
+  ezRelease, clReleaseDevice, OpenCLState(..),
 
   -- * Running OpenCL computations
   CL, CL', runCL, runCL', runCLIO, runCLClean, nestCL,

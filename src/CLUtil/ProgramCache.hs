@@ -102,7 +102,7 @@ clInitState dev =
   do accState <- newIORef (newCleanup, emptyCache)
      let done = readIORef accState
                 >>= runCleanup . fst
-                >> ezRelease dev
+                >> clReleaseDevice dev
          goCL :: CL a -> IO a
          goCL m = do (cleanSt, cacheSt) <- readIORef accState
                      (r,(cln,csh)) <- (runExceptT

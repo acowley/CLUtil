@@ -22,6 +22,11 @@ ezInit t = do (dev:_) <- clGetDeviceIDs nullPtr t
 ezRelease :: OpenCLState -> IO ()
 ezRelease (OpenCLState _ c q) = 
   void $ clReleaseContext c >> clReleaseCommandQueue q
+{-# DEPRECATED ezRelease "Use clReleaseDevice" #-}
+
+-- | Release a context and command queue.
+clReleaseDevice :: OpenCLState -> IO ()
+clReleaseDevice = ezRelease
 
 -- |Initialize the first GPU device found.
 clDeviceGPU :: IO OpenCLState
