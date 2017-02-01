@@ -24,10 +24,11 @@ loadProgramFile s = readFile >=> loadProgram s
 -- executable kernels with the @-cl-fast-relaxed-math@ option from
 -- supplied program source.
 loadProgramFastMath :: OpenCLState -> String -> IO (String -> IO CLKernel)
-loadProgramFastMath state src = 
+loadProgramFastMath state src =
   do p <- clCreateProgramWithSource (clContext state) src
-     clBuildProgram p [clDevice state] 
-                    "-cl-strict-aliasing -cl-fast-relaxed-math"
+     clBuildProgram p [clDevice state]
+                    "-cl-fast-relaxed-math"
+                    -- "-cl-strict-aliasing -cl-fast-relaxed-math"
      return $ clCreateKernel p
 
 -- |Load a program from a file using a previously initialized
@@ -40,5 +41,5 @@ loadProgramFileFastMath s = readFile >=> loadProgramFastMath s
 -- |Load program source from the given file and build the named
 -- kernel.
 kernelFromFile :: OpenCLState -> FilePath -> String -> IO CLKernel
-kernelFromFile state file kname = 
+kernelFromFile state file kname =
   readFile file >>= loadProgram state >>= ($ kname)
