@@ -1,9 +1,8 @@
 {-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances,
-             OverlappingInstances, ScopedTypeVariables, UndecidableInstances #-}
+             ScopedTypeVariables, UndecidableInstances #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module CLUtil.KernelArgsCL (KernelArgsCL, runKernel) where
-import Control.Applicative
 import Control.Monad (void, when)
 import Data.Either (partitionEithers)
 import Data.Vector.Storable (Vector)
@@ -13,7 +12,7 @@ import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
 import Foreign.Ptr (nullPtr, Ptr)
 import Foreign.Storable (Storable(..))
 import CLUtil.CL
-import CLUtil.KernelArgTypes 
+import CLUtil.KernelArgTypes
 import CLUtil.State
 import CLUtil.VectorBuffers
 import Control.Parallel.OpenCL
@@ -73,7 +72,7 @@ class KernelArgsCL a where
   -- the argument, the number of work items specified so far, and a
   -- list of actions that prepare argument buffers and return the
   -- cleanup action to take when the kernel is finished.
-  setArgCL :: CLKernel -> CLuint -> Maybe NumWorkItems -> 
+  setArgCL :: CLKernel -> CLuint -> Maybe NumWorkItems ->
               Maybe WorkGroup -> [PrepExec] -> a
 
 -- Nest a stack of buffer preparation actions. This lets us safely use
@@ -87,12 +86,12 @@ nestM s outputSizes finish = go [] outputSizes
                                              ms)
 
 runCPS :: [Int] -> OpenCLState -> CLKernel -> NumWorkItems -> Maybe WorkGroup ->
-          [PrepExec] -> 
+          [PrepExec] ->
           IO ([IO (IO (ForeignPtr ()), Int)], [IO ()])
 runCPS outputSizes s k n wg prep =
   partitionPost <$> nestM s outputSizes runK prep
-  where runK = do ev <- clEnqueueNDRangeKernel (clQueue s) 
-                                               k 
+  where runK = do ev <- clEnqueueNDRangeKernel (clQueue s)
+                                               k
                                                (workItemsList n)
                                                (maybe [] workGroupSizes wg)
                                                []
@@ -101,7 +100,7 @@ runCPS outputSizes s k n wg prep =
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
-instance CL' m => KernelArgsCL (m ()) where
+instance {-# OVERLAPPABLE #-} CL' m => KernelArgsCL (m ()) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o,cleanup) <- runCPS [] s k n wg prep
@@ -111,7 +110,7 @@ instance CL' m => KernelArgsCL (m ()) where
 
 -- Execute a kernel where the calling context is expecting a single
 -- 'Vector' return value.
-instance forall a m. (Storable a, CL' m) => KernelArgsCL (m (Vector a)) where
+instance {-# OVERLAPPABLE #-} forall a m. (Storable a, CL' m) => KernelArgsCL (m (Vector a)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o,cleanup) <- runCPS [sizeOf (undefined::a)] s k n wg prep
@@ -125,7 +124,7 @@ instance forall a m. (Storable a, CL' m) => KernelArgsCL (m (Vector a)) where
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance forall a b m. (Storable a, Storable b, CL' m) => 
+instance {-# OVERLAPPABLE #-} forall a b m. (Storable a, Storable b, CL' m) =>
   KernelArgsCL (m (Vector a, Vector b)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
@@ -142,17 +141,17 @@ instance forall a b m. (Storable a, Storable b, CL' m) =>
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) => 
+instance {-# OVERLAPPABLE #-} forall a b c m. (Storable a, Storable b, Storable c, CL' m) =>
   KernelArgsCL (m (Vector a, Vector b, Vector c)) where
-  setArgCL k _ (Just n) wg prep = ask >>= \s -> 
+  setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o, cleanup) <- runCPS [ sizeOf (undefined::a)
                              , sizeOf (undefined::b)
                              , sizeOf (undefined::c) ]
                              s k n wg prep
       (r1,r2,r3) <- case o of
-                      [f,g,h] -> (,,) <$> (mkRead <$> f) 
-                                      <*> (mkRead <$> g) 
+                      [f,g,h] -> (,,) <$> (mkRead <$> f)
+                                      <*> (mkRead <$> g)
                                       <*> (mkRead <$> h)
                       _ -> error "Different number of outputs specified than bound"
       sequence_ cleanup
@@ -160,23 +159,23 @@ instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) =>
   setArgCL _ _ _ _ _ = error "The number of work items is missing!"
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
-instance (Storable a, KernelArgsCL r) => KernelArgsCL (a -> r) where
-  setArgCL k arg n wg prep = \a -> 
+instance {-# OVERLAPPABLE #-} (Storable a, KernelArgsCL r) => KernelArgsCL (a -> r) where
+  setArgCL k arg n wg prep = \a ->
     let load cont = clSetKernelArgSto k arg a >>
                     cont (\_ sz -> return (Nothing,sz))
     in setArgCL k (arg+1) n wg (load : prep)
 
 -- Handle 'Vector' input arguments.
-instance (Storable a, KernelArgsCL r) => KernelArgsCL (Vector a -> r) where
-  setArgCL k arg n wg prep = 
-    \v -> let load cont = cont $ \s sz -> 
+instance {-# OVERLAPPING #-} (Storable a, KernelArgsCL r) => KernelArgsCL (Vector a -> r) where
+  setArgCL k arg n wg prep =
+    \v -> let load cont = cont $ \s sz ->
                 withVectorBuffer s v $ \b ->
                   let clean = FreeInput . void $ clReleaseMemObject b
                   in do clSetKernelArgSto k arg b
                         return (Just clean, sz)
           in setArgCL k (arg+1) n wg (load:prep)
 
-instance (Storable a, KernelArgsCL r) => KernelArgsCL (LocalMem a -> r) where
+instance {-# OVERLAPPING #-} (Storable a, KernelArgsCL r) => KernelArgsCL (LocalMem a -> r) where
   setArgCL k arg n wg prep =
     \(Local m) -> let sz = m * sizeOf (undefined::a)
                       local cont = do clSetKernelArg k arg sz nullPtr
@@ -185,11 +184,11 @@ instance (Storable a, KernelArgsCL r) => KernelArgsCL (LocalMem a -> r) where
 
 -- Keep track of an argument that specifies the number of work items
 -- to execute.
-instance KernelArgsCL r => KernelArgsCL (NumWorkItems -> r) where
+instance {-# OVERLAPPING #-} KernelArgsCL r => KernelArgsCL (NumWorkItems -> r) where
   setArgCL k arg _ wg prep = \n -> setArgCL k arg (Just n) wg prep
 
 -- Keep track of an argument that specifies the local work group size.
-instance KernelArgsCL r => KernelArgsCL (WorkGroup -> r) where
+instance {-# OVERLAPPING #-} KernelArgsCL r => KernelArgsCL (WorkGroup -> r) where
   setArgCL k arg n _ prep = \wg -> setArgCL k arg n (Just wg) prep
 
 -- A finalizer we attach to the 'ForeignPtr' wrapping a mapped OpenCL
@@ -203,8 +202,8 @@ bufferFinalizer q b p = do clEnqueueUnmapMemObject q b p [] >>=
 
 -- Handle 'Vector' outputs by automatically managing the underlying
 -- OpenCL buffers.
-instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
-  setArgCL k arg n wg prep = 
+instance {-# OVERLAPPING #-} KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
+  setArgCL k arg n wg prep =
     \(Out m) ->
       let load cont = cont allocateOutput
           allocateOutput _ [] = error "Couldn't determine output element size"
@@ -217,21 +216,21 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
                -- The goal is to map the output buffer, and wrap that
                -- pointer in a Vector. This would mean that the Vector
                -- is wrapping memory allocated by OpenCL.
-               let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
+               let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b
                                                             True [CL_MAP_READ]
-                                                            0 (m*sz) [] 
+                                                            0 (m*sz) []
                                _ <- clWaitForEvents [ev]
                                void $ clReleaseEvent ev
                                newForeignPtr p $ bufferFinalizer (clQueue s) b p
                    finishOutput = return (getPtr,m)
-               return (Just $ ReadOutput finishOutput, szs) 
+               return (Just $ ReadOutput finishOutput, szs)
       in setArgCL k (arg+1) n wg (load:prep)
 
 -- |Simple interface for calling an OpenCL kernel. Supports input
 -- 'Vector' and 'Storable' arguments, and produces 'Vector' or unit
 -- outputs. Uses the actual pointers underlying any vector arguments,
 -- improving performance of kernels run on the CPU.
--- 
+--
 -- > (v1,v2) <- runKernel kernel vIn (Work1D 4) (Out 4) (Out 4)
 --
 -- Note that a 'Vector' returned by using an output parameter

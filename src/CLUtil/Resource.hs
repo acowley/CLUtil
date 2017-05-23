@@ -26,7 +26,7 @@ module CLUtil.Resource (
   ask, throwError, liftIO,
 
   -- * Buffer Objects
-  CLBuffer(..), allocBuffer, allocBufferKey, 
+  CLBuffer(..), allocBuffer, allocBufferKey,
   initBuffer, initBufferKey,
   readBuffer, readBuffer', writeBuffer, withSharedVector, withSharedMVector,
 
@@ -34,7 +34,7 @@ module CLUtil.Resource (
   CLImage(..), allocImage, allocImageKey, allocImageFmt,
   initImage, initImageKey, initImageFmt,
   readImage, readImage', writeImage, copyImage,
-  NumChan(..), HalfFloat, 
+  NumChan(..), HalfFloat,
   NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
   CLImage1, CLImage2, CLImage3, CLImage4,
 
@@ -72,14 +72,12 @@ import qualified CLUtil.Buffer as B
 import qualified CLUtil.CL as R
 import CLUtil.Image hiding (allocImageFmt, allocImage, initImageFmt, initImage)
 import qualified CLUtil.Image as I
-import Control.Applicative
 import Control.Lens
 import Control.Monad.State
 import Control.Parallel.OpenCL
 import Data.Foldable (Foldable, sequenceA_)
 import Data.IntMap.Strict (IntMap)
 import qualified Data.IntMap.Strict as IM
-import Data.Monoid
 import Data.Proxy
 import qualified Data.Vector.Storable as V
 

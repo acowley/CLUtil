@@ -1,5 +1,5 @@
 Name:                CLUtil
-Version:             0.8
+Version:             0.9
 Synopsis:            A thin abstraction layer over the OpenCL library.
 
 Description: Medium level abstractions for working with OpenCL. OpenCL
@@ -26,7 +26,7 @@ Category:            System
 Build-type:          Simple
 Cabal-version:       >=1.10
 
-Extra-Source-Files: examples/QuasiCrystalDisplay.hs, 
+Extra-Source-Files: examples/QuasiCrystalDisplay.hs,
                     examples/QuasiCrystalRGBA.cl,
                     examples/TestEZ.hs,
                     examples/VecEZ.cl,
@@ -69,6 +69,7 @@ Library
 test-suite tests
   type:             exitcode-stdio-1.0
   main-is:          UnitTests.hs
+  other-modules:    TestEZ, CLMonad
   default-language: Haskell2010
   ghc-options:      -Wall
   hs-source-dirs:   examples

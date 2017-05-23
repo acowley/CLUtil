@@ -10,10 +10,10 @@
 module CLUtil.ProgramCache (
   -- * Initialization
   ezInit, clDeviceGPU, clDeviceCPU, clDeviceSelect,
-  ezRelease, OpenCLState(..),
+  ezRelease, clReleaseDevice, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, CL', runCL, runCL', runCLIO, runCLClean, nestCL, clInitState,
+  CL, CL', runCL, runCL', runCLIO, runCLClean, nestCL, clInitState, AnyCL(..),
 
   -- * Mangaging images and buffers
   HasCLMem(getCLMem), Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
@@ -35,7 +35,7 @@ module CLUtil.ProgramCache (
   CLImage(..), R.allocImage, R.allocImageKey, R.allocImageFmt,
   R.initImage, R.initImageKey, R.initImageFmt,
   readImage, readImage', writeImage, copyImage,
-  NumChan(..), HalfFloat, 
+  NumChan(..), HalfFloat,
   NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
   CLImage1, CLImage2, CLImage3, CLImage4,
 
@@ -60,7 +60,6 @@ import CLUtil.Resource hiding (CL, CL', runCL, runCL', runCLIO,
 import qualified CLUtil.CL as Base
 import qualified CLUtil.Resource as R
 import CLUtil.Load
-import Control.Applicative
 import Control.Lens (_2, (%~), Lens', lens, use, (.=))
 import Control.Monad.IO.Class
 import Control.Monad.Except
@@ -91,13 +90,15 @@ instance HasCache (a,Cache) where
 type CL = StateT (R.Cleanup, Cache) Base.CL
 type CL' s m = (MonadState s m, HasCache s, R.CL' s m)
 
+newtype AnyCL = AnyCL { runAnyCL :: forall a. CL a -> IO a }
+
 -- | Initialize some mutable state for running OpenCL
 -- computations. This maintains a reference to a cache of loaded
 -- programs and resource allocations. The first returned function may
 -- be used to run 'CL' computations in a shared state. The second
 -- returned value will release all remaining resources and the OpenCL
 -- device itself.
-clInitState :: OpenCLState -> IO (forall a. CL a -> IO a, IO ())
+clInitState :: OpenCLState -> IO (AnyCL, IO ())
 clInitState dev =
   do accState <- newIORef (newCleanup, emptyCache)
      let done = readIORef accState
@@ -111,11 +112,10 @@ clInitState dev =
                                       >>= either error return
                      writeIORef accState (cln,csh)
                      return r
-     return (goCL, done)
-
+     return (AnyCL goCL, done)
 
 loadKernel' :: MonadIO m => String -> KCache -> m (CLKernel, KCache)
-loadKernel' kName p@(mk, cache) = 
+loadKernel' kName p@(mk, cache) =
   case M.lookup kName cache of
     Nothing -> do k <- liftIO $ mk kName
                   return (k, (mk, M.insert kName k cache))
