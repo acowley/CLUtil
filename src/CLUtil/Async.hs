@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, DataKinds, KindSignatures, 
+{-# LANGUAGE GADTs, DataKinds, KindSignatures,
              FlexibleInstances, FlexibleContexts, MultiParamTypeClasses,
              TypeFamilies, TypeOperators #-}
 -- | Utilities for dealing with asynchronous results. If a 'CLEvent'
@@ -7,12 +7,11 @@
 -- 'waitAll' function. If our asynchronous computations produce values
 -- of differing types, then we can make use of a heterogenous list to
 -- accumulate these promised results and to represent the results.
-module CLUtil.Async 
+module CLUtil.Async
   (HList(..), (<+>), (++), (&:), singAsync, waitReleaseEvent,
    waitAll, waitAll', waitAll_, waitAllUnit, waitOne, CLAsync(..),
    clAsync, sequenceAsync,
    Blockers, blocker, getBlockers, releaseBlockers) where
-import Control.Applicative
 import Control.Arrow (first)
 import Control.Monad.IO.Class
 import Control.Parallel.OpenCL

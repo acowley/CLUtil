@@ -19,7 +19,7 @@ testPre :: IO (Vector CFloat)
 testPre = do gpu <- clDeviceGPU
              (vadd, clean) <- runCL gpu $ mkVadd 6
              r <- runCL' gpu $ vadd v1 v2
-             r <$ (runCleanup clean >> ezRelease gpu)
+             r <$ (runCleanup clean >> clReleaseDevice gpu)
   where v1 = V.fromList [1,2,3,4,5,6]
         v2 = V.fromList [7,8,9,10,11,12]
 
@@ -36,7 +36,7 @@ testNoPre = do gpu <- clDeviceGPU
                       do k <- getKernel "examples/VecAdd.cl" "vadd2D"
                          runKernel k v1 v2 (Out 6) (Work2D 3 2)
                r' <- vectorDup r
-               r' <$ ezRelease gpu
+               r' <$ clReleaseDevice gpu
   where v1,v2 :: Vector CFloat
         v1 = V.fromList [1,2,3,4,5,6]
         v2 = V.fromList [7,8,9,10,11,12]

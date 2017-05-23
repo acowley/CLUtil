@@ -1,0 +1,22 @@
+resolver: lts-8.15
+
+packages:
+- .
+
+# These are to support macOS Sierra for which a change to language-c
+# is needed. See: <https://github.com/visq/language-c/pull/35>
+- location: ../language-c/
+  extra-dep: true
+- location: ../c2hs/
+  extra-dep: true
+
+extra-deps:
+- OpenCL-1.0.3.4
+
+flags: {}
+
+extra-package-dbs: []
+
+nix:
+  enable: true
+  shell-file: shell.nix

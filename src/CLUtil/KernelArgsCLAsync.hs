@@ -1,16 +1,15 @@
 {-# LANGUAGE ConstraintKinds, FlexibleContexts, FlexibleInstances,
-             GeneralizedNewtypeDeriving, OverlappingInstances,
-             ScopedTypeVariables, TupleSections, UndecidableInstances #-}
+             GeneralizedNewtypeDeriving, ScopedTypeVariables, TupleSections,
+             UndecidableInstances #-}
 -- |Synchronous OpenCL kernel execution that avoids copying input
 -- 'Vector's when running the OpenCL kernel on the CPU.
-module CLUtil.KernelArgsCLAsync 
+module CLUtil.KernelArgsCLAsync
   (KernelArgsCL, runKernelAsync) where
 import CLUtil.Async
 import CLUtil.CL
-import CLUtil.KernelArgTypes 
+import CLUtil.KernelArgTypes
 import CLUtil.State
 import CLUtil.VectorBuffers
-import Control.Applicative
 import Control.Arrow (second)
 import Control.Monad (void, when)
 import Control.Parallel.OpenCL
@@ -57,7 +56,7 @@ type PrepExec = PrepCont -> IO (CLEvent, [PostExec])
 
 -- Wrap an output buffer in a 'Vector'.
 mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
-mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr 
+mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr
                    <$> getPtr
 
 -- | Implementation of a variable arity technique similar to
@@ -85,8 +84,8 @@ runCPS :: [Int] -> OpenCLState -> CLKernel -> NumWorkItems -> Maybe WorkGroup
        -> IO (CLEvent, ([IO (IO (ForeignPtr ()), Int)], [IO ()]))
 runCPS outputSizes s k n wg bs prep =
   second partitionPost <$> nestM s outputSizes runK prep
-  where runK = clEnqueueNDRangeKernel (clQueue s) 
-                                      k 
+  where runK = clEnqueueNDRangeKernel (clQueue s)
+                                      k
                                       (workItemsList n)
                                       (maybe [] workGroupSizes wg)
                                       (getBlockers bs)
@@ -119,7 +118,7 @@ instance forall a m. (Storable a, CL' m) =>
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance forall a b m. (Storable a, Storable b, CL' m) => 
+instance forall a b m. (Storable a, Storable b, CL' m) =>
   KernelArgsCL (m (CLAsync (Vector a, Vector b))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
@@ -136,17 +135,17 @@ instance forall a b m. (Storable a, Storable b, CL' m) =>
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) => 
+instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) =>
   KernelArgsCL (m (CLAsync (Vector a, Vector b, Vector c))) where
-  setArgCL k _ (Just n) wg bs prep = ask >>= \s -> 
+  setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
       (ev, (o, cleanup)) <- runCPS [ sizeOf (undefined::a)
                                    , sizeOf (undefined::b)
                                    , sizeOf (undefined::c) ]
                                    s k n wg bs prep
       (r1,r2,r3) <- case o of
-                      [f,g,h] -> (,,) <$> (mkRead <$> f) 
-                                      <*> (mkRead <$> g) 
+                      [f,g,h] -> (,,) <$> (mkRead <$> f)
+                                      <*> (mkRead <$> g)
                                       <*> (mkRead <$> h)
                       _ -> error "Different number of outputs specified than bound"
       sequence_ cleanup
@@ -155,15 +154,15 @@ instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) =>
 
 -- Pass an arbitrary 'Storable' as a kernel argument.
 instance (Storable a, KernelArgsCL r) => KernelArgsCL (a -> r) where
-  setArgCL k arg n wg bs prep = \a -> 
+  setArgCL k arg n wg bs prep = \a ->
     let load cont = clSetKernelArgSto k arg a >>
                     cont (\_ sz -> return (Nothing,sz))
     in setArgCL k (arg+1) n wg bs (load : prep)
 
 -- Handle 'Vector' input arguments.
 instance (Storable a, KernelArgsCL r) => KernelArgsCL (Vector a -> r) where
-  setArgCL k arg n wg bs prep = 
-    \v -> let load cont = cont $ \s sz -> 
+  setArgCL k arg n wg bs prep =
+    \v -> let load cont = cont $ \s sz ->
                 withVectorBuffer s v $ \b ->
                   let clean = FreeInput . void $ clReleaseMemObject b
                   in do clSetKernelArgSto k arg b
@@ -201,11 +200,11 @@ bufferFinalizer q b p = do clEnqueueUnmapMemObject q b p [] >>=
 -- Handle 'Vector' outputs by automatically managing the underlying
 -- OpenCL buffers.
 instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
-  setArgCL k arg n wg bs prep = 
-    \(Out m) -> 
+  setArgCL k arg n wg bs prep =
+    \(Out m) ->
       let load cont = cont allocateOutput
           allocateOutput _ [] = error "Couldn't determine output element size"
-          allocateOutput s (sz:szs) = 
+          allocateOutput s (sz:szs) =
             do b <- clCreateBuffer (clContext s)
                                    [ CL_MEM_WRITE_ONLY
                                    , CL_MEM_ALLOC_HOST_PTR ]
@@ -214,14 +213,14 @@ instance KernelArgsCL r => KernelArgsCL (OutputSize -> r) where
                -- The goal is to map the output buffer, and wrap that
                -- pointer in a Vector. This would mean that the Vector
                -- is wrapping memory allocated by OpenCL.
-               let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b 
+               let getPtr = do (ev,p) <- clEnqueueMapBuffer (clQueue s) b
                                                             True [CL_MAP_READ]
-                                                            0 (m*sz) [] 
+                                                            0 (m*sz) []
                                void $ clReleaseEvent ev
                                -- clWaitForEvents [ev]
-                               newForeignPtr p $ bufferFinalizer (clQueue s) b p 
+                               newForeignPtr p $ bufferFinalizer (clQueue s) b p
                    finishOutput = return (getPtr,m)
-               return (Just $ ReadOutput finishOutput, szs) 
+               return (Just $ ReadOutput finishOutput, szs)
       in setArgCL k (arg+1) n wg bs (load:prep)
 
 -- | Simple interface for calling an OpenCL kernel in an asynchronous

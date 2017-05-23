@@ -12,7 +12,7 @@ module CLUtil.Image (
   allocImage, allocImageFmt, initImage, initImageFmt, defaultFormat,
 
   -- * Working with images
-  readImage', readImage, readImageAsync', readImageAsync, 
+  readImage', readImage, readImageAsync', readImageAsync,
   writeImage, writeImageAsync,
   copyImageAsync, copyImage, imageCompatible,
 
@@ -87,16 +87,16 @@ instance HasCLMem (CLImage n a) where
   getCLMem (CLImage _ m) = m
 
 -- | A 'CLImage' with one channel per pixel.
-type CLImage1 = CLImage OneChan
+type CLImage1 = CLImage 'OneChan
 
 -- | A 'CLImage' with two channels per pixel.
-type CLImage2 = CLImage TwoChan
+type CLImage2 = CLImage 'TwoChan
 
 -- | A 'CLImage' with three channels per pixel.
-type CLImage3 = CLImage ThreeChan
+type CLImage3 = CLImage 'ThreeChan
 
 -- | A 'CLImage' with four channels per pixel.
-type CLImage4 = CLImage FourChan
+type CLImage4 = CLImage 'FourChan
 
 -- Kind-polymorphic proxy to pass types around.
 -- data Proxy a = Proxy
@@ -111,7 +111,7 @@ class ChanCompatible (a::NumChan) where
   chanCompatible :: Proxy a -> CLChannelOrder -> Bool
   defaultChan :: Proxy a -> CLChannelOrder
 
-instance ChanCompatible OneChan where
+instance ChanCompatible 'OneChan where
   chanCompatible _ CL_R         = True
   chanCompatible _ CL_A         = True
   chanCompatible _ CL_INTENSITY = True
@@ -119,18 +119,18 @@ instance ChanCompatible OneChan where
   chanCompatible _ _            = False
   defaultChan _ = CL_R
 
-instance ChanCompatible TwoChan where
+instance ChanCompatible 'TwoChan where
   chanCompatible _ CL_RG = True
   chanCompatible _ CL_RA = True
   chanCompatible _ _     = False
   defaultChan _ = CL_RG
 
-instance ChanCompatible ThreeChan where
+instance ChanCompatible 'ThreeChan where
   chanCompatible _ CL_RGB = True
   chanCompatible _ _      = False
   defaultChan _ = CL_RGB
 
-instance ChanCompatible FourChan where
+instance ChanCompatible 'FourChan where
   chanCompatible _ CL_RGBA = True
   chanCompatible _ CL_ARGB = True
   chanCompatible _ CL_BGRA = True
@@ -188,10 +188,10 @@ instance TypeCompatible NormWord16 where
 class ChanSize (a::NumChan) where
   numChan :: Proxy a -> Int
 
-instance ChanSize OneChan   where numChan _ = 1
-instance ChanSize TwoChan   where numChan _ = 2
-instance ChanSize ThreeChan where numChan _ = 3
-instance ChanSize FourChan  where numChan _ = 4
+instance ChanSize 'OneChan   where numChan _ = 1
+instance ChanSize 'TwoChan   where numChan _ = 2
+instance ChanSize 'ThreeChan where numChan _ = 3
+instance ChanSize 'FourChan  where numChan _ = 4
 
 -- | NOTE: This is an EVIL 'Storable' instance that lets us treat a
 -- 'CLImage' as its underlying 'CLMem' value for the sake of
@@ -214,11 +214,11 @@ defaultFormat _ = CLImageFormat (defaultChan (Proxy::Proxy n))
 imageCompatible :: forall n b m. (ValidImage n b, CL' m)
                 => CLImageFormat -> Proxy (CLImage n b) -> m ()
 imageCompatible (CLImageFormat order dtype) _
-  | not (chanCompatible (Proxy::Proxy n) order) = 
+  | not (chanCompatible (Proxy::Proxy n) order) =
       throwError $ "Image format specifies channels "++
                    show order++
                    ", which is incompatible with the CLImage channel count."
-  | fromEnum (typeCompatible (Proxy::Proxy b)) /= fromEnum dtype = 
+  | fromEnum (typeCompatible (Proxy::Proxy b)) /= fromEnum dtype =
       throwError $ "Image channel data type "++show dtype++
                    " is incompatible with the CLImage channel data type."
   | otherwise = return ()
@@ -247,7 +247,7 @@ allocImageFmt flags fmt dims =
 -- 'CLImageFormat CL_R CL_FLOAT') . The image is registered for
 -- cleanup, and the key used to perform an early cleanup of the image
 -- is returned.
-allocImage :: forall f a n b m. 
+allocImage :: forall f a n b m.
               (Integral a, Foldable f, Functor f, ValidImage n b, CL' m)
            => [CLMemFlag] -> f a -> m (CLImage n b)
 allocImage flags = allocImageFmt flags fmt
@@ -385,15 +385,15 @@ readImageAsync img@(CLImage dims _) =
 -- itself is right out. The 'CLMapFlag's supplied determine if we have
 -- read-only, write-only, or read/write access to the 'VM.MVector'.
 withImageAsync_ :: forall n a r m. (ChanSize n, Storable a, CL' m)
-                => [CLMapFlag] -> CLImage n a 
+                => [CLMapFlag] -> CLImage n a
                 -> (forall s. VM.MVector s a -> ST s r) -> m (CLAsync r)
 withImageAsync_ flags (CLImage dims mem) f =
   do q <- clQueue <$> ask
-     liftIO $ do 
+     liftIO $ do
        (ev, (ptr, _pitch, sz)) <- clEnqueueMapImage q mem False flags
                                                     (0,0,0) dims []
        let go = do fp <- newForeignPtr_ $ castPtr ptr
-                   x <- evaluate =<< 
+                   x <- evaluate =<<
                         (unsafeSTToIO
                          $ f . VM.unsafeFromForeignPtr0 fp
                          $ fromIntegral sz `quot` sizeOf (undefined::a))
@@ -429,7 +429,7 @@ withImageRW img f = withImageRWAsync img f >>= waitOne
 -- itself is right out.
 withImageAsync :: (ChanSize n, Storable a, CL' m)
                => CLImage n a -> (V.Vector a -> r) -> m (CLAsync r)
-withImageAsync img f = 
+withImageAsync img f =
   withImageAsync_ [CL_MAP_READ] img (fmap f . V.unsafeFreeze)
 
 -- | Provides read/write access to a memory-mapped 'V.Vector' of a

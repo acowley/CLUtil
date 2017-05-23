@@ -20,7 +20,7 @@ import CLUtil.Buffer (CLBuffer)
 import qualified CLUtil.BufferImageInterop as B
 import CLUtil.Image hiding
   (readImage', readImageAsync', readImageAsync, readImage,
-   initImageFmt, initImage, 
+   initImageFmt, initImage,
    writeImageAsync, writeImage)
 import qualified CLUtil.Image as I
 import CLUtil.CL (CL')
@@ -33,10 +33,10 @@ import Foreign.Storable (Storable)
 import Linear (V1, V2, V3, V4)
 
 type family LinearChan (a::NumChan) :: * -> *
-type instance LinearChan OneChan   = V1
-type instance LinearChan TwoChan   = V2
-type instance LinearChan ThreeChan = V3
-type instance LinearChan FourChan  = V4
+type instance LinearChan 'OneChan   = V1
+type instance LinearChan 'TwoChan   = V2
+type instance LinearChan 'ThreeChan = V3
+type instance LinearChan 'FourChan  = V4
 
 -- | Flatten a 'Vector' when the representation of @Vector (t a)@ and
 -- @Vecor a@ are the same modulo differences in number of elements.
@@ -54,7 +54,7 @@ unflatten = V.unsafeCast
 -- 3 times the number of pixels. The image resource is registered for
 -- cleanup.
 initImageFmtRes :: (Integral a, F.Foldable f, Functor f,
-                    Storable b, Storable (LinearChan n b), 
+                    Storable b, Storable (LinearChan n b),
                     ValidImage n b, Res.CL' s m)
                 => [CLMemFlag] -> CLImageFormat -> f a -> Vector (LinearChan n b)
                 -> m (CLImage n b)
@@ -68,7 +68,7 @@ initImageFmtRes flags fmt dims =
 -- then we expect a 'Vector Float' with a number of elements equal to
 -- 3 times the number of pixels.
 initImageFmt :: (Integral a, F.Foldable f, Functor f,
-                 Storable b, Storable (LinearChan n b), 
+                 Storable b, Storable (LinearChan n b),
                  ValidImage n b, CL' m)
              => [CLMemFlag] -> CLImageFormat -> f a -> Vector (LinearChan n b)
              -> m (CLImage n b)
@@ -104,7 +104,7 @@ initImageRes flags dims = Res.initImage flags dims . flatten
 readImageAsync' :: (Storable a, Storable (LinearChan n a), ChanSize n, CL' m)
                 => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
                 -> m (CLAsync (Vector (LinearChan n a)))
-readImageAsync' img origin region waitForIt = 
+readImageAsync' img origin region waitForIt =
   fmap unflatten <$> I.readImageAsync' img origin region waitForIt
 
 -- | @readImage' mem origin region events@ reads back a 'Vector' of
@@ -114,7 +114,7 @@ readImageAsync' img origin region waitForIt =
 readImage' :: (Storable a, ChanSize n, Storable (LinearChan n a), CL' m)
           => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
           -> m (Vector (LinearChan n a))
-readImage' img origin region waitForIt = 
+readImage' img origin region waitForIt =
   unflatten <$> I.readImage' img origin region waitForIt
 
 -- | Read the entire contents of an image into a 'Vector'. This
