@@ -1,4 +1,4 @@
--- |High-level interfaces for working with 'Vector's and the OpenCL
+-- | High-level interfaces for working with 'Vector's and the OpenCL
 -- library.
 module CLUtil (
   -- * Initialization
@@ -54,13 +54,10 @@ import CLUtil.Initialization
 import CLUtil.Buffer
 import CLUtil.Image
 import CLUtil.BufferImageInterop
--- import CLUtil.KernelArgsCL
--- import CLUtil.KernelArgsCLAsync (runKernelAsync)
 import CLUtil.KernelArgs
 import CLUtil.State
 import CLUtil.Async
 import CLUtil.Load
-
 import Data.Int
 import Data.Word
 import Foreign.Storable (Storable)
