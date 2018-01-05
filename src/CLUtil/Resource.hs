@@ -20,6 +20,7 @@ module CLUtil.Resource (
   runCleanup, releaseItem, CLReleasable(releaseObject), newCleanup, HasCleanup,
 
   -- * Kernels
+  loadProgram, loadProgramFile, kernelFromFile,
   KernelArgs, runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
@@ -52,7 +53,8 @@ module CLUtil.Resource (
   LocalMem(..), localFloat, localDouble, localInt, localWord32, vectorDup,
 
   -- * Re-exports for convenience
-  module Control.Parallel.OpenCL, Vector, CInt, CFloat, Word8, Storable
+  module Control.Parallel.OpenCL, Vector,
+  CInt, CFloat, Word8, Word16, Word32, Int8, Int16, Int32, Storable
 {-
   -- * Images
   allocImageFmt, allocImageKey, allocImage, allocImage_,
@@ -67,12 +69,15 @@ module CLUtil.Resource (
 -}
   ) where
 import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage,
-                      CL, HasCL, runCL)
+                      CL, HasCL, runCL, ask, loadProgram,
+                      loadProgramFile, kernelFromFile)
 import qualified CLUtil.Buffer as B
 import qualified CLUtil.CL as R
 import CLUtil.Image hiding (allocImageFmt, allocImage, initImageFmt, initImage)
 import qualified CLUtil.Image as I
+import qualified CLUtil.Load as Load
 import Control.Lens
+import Control.Monad.Reader.Class (ask)
 import Control.Monad.State
 import Control.Parallel.OpenCL
 import Data.Foldable (Foldable, sequenceA_)
@@ -124,6 +129,15 @@ newCleanup = Cleanup 0 mempty
 -- | Run all cleanup actions.
 runCleanup :: Cleanup -> IO ()
 runCleanup (Cleanup _ m) = sequenceA_ m
+
+loadProgram :: String -> CL (String -> IO CLKernel)
+loadProgram src = ask >>= \s -> liftIO (Load.loadProgram s src)
+
+loadProgramFile :: FilePath -> CL (String -> IO CLKernel)
+loadProgramFile p = ask >>= \s -> liftIO (Load.loadProgramFile s p)
+
+kernelFromFile :: FilePath -> String -> CL CLKernel
+kernelFromFile p k = ask >>= \s -> liftIO (Load.kernelFromFile s p k)
 
 -- | Register a cleanup action.
 registerCleanup :: HasCL s m => IO () -> m ReleaseKey

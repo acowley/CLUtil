@@ -1,12 +1,12 @@
 module CLMonad where
 import Control.Applicative ((<$))
 import Control.Monad
-import CLUtil.ProgramCache
+import CLUtil.Resource
 import qualified Data.Vector.Storable as V
 
 -- Pre-allocate buffers for arguments and result.
 mkVadd :: Int -> CL (Vector CFloat -> Vector CFloat -> CL (Vector CFloat))
-mkVadd n = do k <- getKernel "examples/VecAdd.cl" "vadd1D"
+mkVadd n = do k <- kernelFromFile "examples/VecAdd.cl" "vadd1D"
               [b1,b2] <- replicateM 2 $ allocBuffer [CL_MEM_READ_ONLY] n
               r <- allocBuffer [CL_MEM_WRITE_ONLY] n
               return $ \v1 v2 ->
@@ -33,7 +33,7 @@ showOutput = putStrLn . ("Result is " ++) . show
 testNoPre :: IO (Vector CFloat)
 testNoPre = do gpu <- clDeviceGPU
                r <- runCLClean gpu $
-                      do k <- getKernel "examples/VecAdd.cl" "vadd2D"
+                      do k <- kernelFromFile "examples/VecAdd.cl" "vadd2D"
                          runKernel k v1 v2 (Out 6) (Work2D 3 2)
                r' <- vectorDup r
                r' <$ clReleaseDevice gpu
