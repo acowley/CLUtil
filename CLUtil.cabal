@@ -26,24 +26,25 @@ Category:            System
 Build-type:          Simple
 Cabal-version:       >=1.10
 
-Extra-Source-Files: examples/QuasiCrystalDisplay.hs,
-                    examples/QuasiCrystalRGBA.cl,
+Extra-Source-Files: examples/QuasiCrystalRGBA.cl,
+                    examples/QuasiCrystalRGBAFast.cl,
                     examples/TestEZ.hs,
                     examples/VecEZ.cl,
                     examples/VecEZ2.cl,
-                    examples/CLMonad.hs,
                     examples/VecAdd.cl
+
+flag demos
+  description: Build demonstration programs
+  default:     False
+  manual:      True
 
 Library
   Exposed-modules:     CLUtil,
                        CLUtil.CL,
-                       CLUtil.ProgramCache,
                        CLUtil.Resource,
                        CLUtil.Buffer,
                        CLUtil.Image,
                        CLUtil.Image.Linear,
-                       CLUtil.KernelArgsCL,
-                       CLUtil.KernelArgsCLAsync,
                        CLUtil.BufferImageInterop,
                        CLUtil.Async,
                        CLUtil.Scratch,
@@ -51,7 +52,7 @@ Library
                        CLUtil.Load,
                        CLUtil.Initialization,
                        CLUtil.VectorBuffers,
-                       CLUtil.KernelArgTypes
+                       CLUtil.KernelArgs
   HS-Source-Dirs:      src
   Build-depends:       base >= 4.6,
                        bytestring,
@@ -74,3 +75,33 @@ test-suite tests
   ghc-options:      -Wall
   hs-source-dirs:   examples
   build-depends:    base, vector, CLUtil, tasty, tasty-hunit
+
+executable quasi
+  if !flag(demos)
+    buildable: False
+  main-is: QuasiCrystalDisplay.hs
+  if flag(demos)
+    build-depends: base, vector, gloss, CLUtil
+  hs-source-dirs: examples
+  default-language: Haskell2010
+  ghc-options: -Wall
+
+executable quasi-fast
+  if !flag(demos)
+    buildable: False
+  main-is: QuasiCrystalDisplayFast.hs
+  if flag(demos)
+    build-depends: base, vector, gloss, CLUtil
+  hs-source-dirs: examples
+  default-language: Haskell2010
+  ghc-options: -Wall
+
+executable quasi-faster
+  if !flag(demos)
+    buildable: False
+  main-is: QuasiCrystalDisplayFaster.hs
+  if flag(demos)
+    build-depends: base, vector, gloss, CLUtil
+  hs-source-dirs: examples
+  default-language: Haskell2010
+  ghc-options: -Wall

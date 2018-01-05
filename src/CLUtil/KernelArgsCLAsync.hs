@@ -22,24 +22,6 @@ import Foreign.ForeignPtr (ForeignPtr, castForeignPtr)
 import Foreign.Ptr (nullPtr, Ptr)
 import Foreign.Storable (Storable(..))
 
--- NOTE: This is adapted from KernelArgsCPS. The only change is to
--- push the use of the 'OpenCLState' value to final kernel execution
--- so that this kernel-running interface fits in better with use of
--- the 'CL' monad.
-
--- In this variation, reading an output is an action that maps the
--- OpenCL buffer, and provides a ForeignPtr and the number of elements
--- in the output vector.
-data PostExec = ReadOutput (IO (IO (ForeignPtr ()), Int))
-              | FreeInput (IO ())
-
-postToEither :: PostExec -> Either (IO (IO (ForeignPtr ()), Int)) (IO ())
-postToEither (ReadOutput r) = Left r
-postToEither (FreeInput m) = Right m
-
-partitionPost :: [PostExec] -> ([IO (IO (ForeignPtr ()), Int)], [IO ()])
-partitionPost = partitionEithers . map postToEither
-
 -- The continuation of a buffer preperation step is a function takes
 -- an 'OpenCLState' and a list of element sizes, and returns an action
 -- to perform after kernel execution and the remaining element
@@ -55,9 +37,9 @@ type PrepCont = (OpenCLState -> [Int] -> IO (Maybe PostExec, [Int]))
 type PrepExec = PrepCont -> IO (CLEvent, [PostExec])
 
 -- Wrap an output buffer in a 'Vector'.
-mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
-mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr
-                   <$> getPtr
+-- mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
+-- mkRead (getPtr,num) =  flip V.unsafeFromForeignPtr0 num . castForeignPtr
+--                    <$> getPtr
 
 -- | Implementation of a variable arity technique similar to
 -- "Text.Printf".
@@ -92,7 +74,7 @@ runCPS outputSizes s k n wg bs prep =
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
-instance CL' m => KernelArgsCL (m (CLAsync ())) where
+instance HasCL m => KernelArgsCL (m (CLAsync ())) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
       (ev, (o,cleanup)) <- runCPS [] s k n wg bs prep
@@ -103,7 +85,7 @@ instance CL' m => KernelArgsCL (m (CLAsync ())) where
 
 -- Execute a kernel where the calling context is expecting a single
 -- 'Vector' return value.
-instance forall a m. (Storable a, CL' m) =>
+instance forall a m. (Storable a, HasCL m) =>
   KernelArgsCL (m (CLAsync (Vector a))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
@@ -118,7 +100,7 @@ instance forall a m. (Storable a, CL' m) =>
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance forall a b m. (Storable a, Storable b, CL' m) =>
+instance forall a b m. (Storable a, Storable b, HasCL m) =>
   KernelArgsCL (m (CLAsync (Vector a, Vector b))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do
@@ -135,7 +117,7 @@ instance forall a b m. (Storable a, Storable b, CL' m) =>
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance forall a b c m. (Storable a, Storable b, Storable c, CL' m) =>
+instance forall a b c m. (Storable a, Storable b, Storable c, HasCL m) =>
   KernelArgsCL (m (CLAsync (Vector a, Vector b, Vector c))) where
   setArgCL k _ (Just n) wg bs prep = ask >>= \s ->
     liftIO $ do

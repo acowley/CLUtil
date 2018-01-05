@@ -1,6 +1,6 @@
 float wrap(float);
 
-__kernel void quasiCrystal(int pixels, 
+__kernel void quasiCrystal(int pixels,
                            float scale,
                            float phase,
                            __global float *cosAngles,
@@ -18,7 +18,7 @@ __kernel void quasiCrystal(int pixels,
 
   float8 cosines = vload8(0, cosAngles);
   float8 sines = vload8(0, sinAngles);
- 
+
   float8 waves = (cos(cosines*u + sines*v + phase) + 1.0f) / 2.0f;
   float sum = waves.s0 + waves.s1 + waves.s2 + waves.s3 + waves.s4 + waves.s5 + waves.s6;
   uchar r = (uchar)(255.0f * clamp(wrap(sum), 0.0f, 1.0f));
