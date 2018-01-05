@@ -1,5 +1,5 @@
 Name:                CLUtil
-Version:             0.9
+Version:             0.10.0
 Synopsis:            A thin abstraction layer over the OpenCL library.
 
 Description: Medium level abstractions for working with OpenCL. OpenCL
@@ -31,7 +31,8 @@ Extra-Source-Files: examples/QuasiCrystalRGBA.cl,
                     examples/TestEZ.hs,
                     examples/VecEZ.cl,
                     examples/VecEZ2.cl,
-                    examples/VecAdd.cl
+                    examples/VecAdd.cl,
+                    CHANGELOG.md
 
 flag demos
   description: Build demonstration programs

@@ -1,12 +1,12 @@
 -- | Examples where CLUtil allocates any needed output buffers.
 module TestEZ where
-import CLUtil.ProgramCache
+import CLUtil.Resource
 import qualified Data.Vector.Storable as V
 
 test1 :: IO (Vector Float)
 test1 = do dev <- clDeviceCPU
            r <- runCLClean dev $
-             do k <- getKernel "examples/VecEZ.cl" "vecAdd"
+             do k <- kernelFromFile "examples/VecEZ.cl" "vecAdd"
                 runKernel k v1 v2 (Out 4) (Work1D 1)
            r' <- vectorDup r
            r' <$ clReleaseDevice dev
@@ -16,7 +16,7 @@ test1 = do dev <- clDeviceCPU
 test2 :: IO (Vector Double, Vector CInt)
 test2 = do dev <- clDeviceCPU
            (rd,ri) <- runCLClean dev $
-             do k <- getKernel "examples/VecEZ.cl" "funnyBusiness"
+             do k <- kernelFromFile "examples/VecEZ.cl" "funnyBusiness"
                 runKernel k v1 v2
                   (Out 12) -- v3 is a 12-element output
                   (Out 3)  -- v4 is a 3-element output
@@ -29,7 +29,7 @@ test2 = do dev <- clDeviceCPU
 test3 :: IO [Vector Float]
 test3 = do dev <- ezInit CL_DEVICE_TYPE_ALL
            r <- runCLClean dev $
-             do k <- getKernel "examples/VecEZ2.cl" "floaty"
+             do k <- kernelFromFile "examples/VecEZ2.cl" "floaty"
                 runKernel k v1 v2 (Out 16) (Work2D 4 4)
            r' <- vectorDup r
            map (\i -> (V.slice i 4 r')) [0,4..12] <$ clReleaseDevice dev
