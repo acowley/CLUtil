@@ -98,7 +98,7 @@ waitAllUnit = waitAll_
 
 -- | Block on a single asynchronous computation. The 'CLEvent' is
 -- released.
-waitOne :: (Functor m, MonadIO m) => CLAsync a -> m a
+waitOne :: MonadIO m => CLAsync a -> m a
 waitOne = fmap head . waitAll . (:[])
 
 type family (as :: [*]) ++ (bs :: [*]) :: [*]
@@ -139,7 +139,7 @@ instance SequenceH ts => SequenceH (CLAsync a ': ts) where
 
 -- | Block until the results of all given 'CL' actions are ready. Each
 -- action may produce a different type of value.
-waitAll' :: (SequenceH xs, HasEvents xs, Applicative m, MonadIO m)
+waitAll' :: (SequenceH xs, HasEvents xs, MonadIO m)
          => HList xs -> m (HList (Sequence (MapSnd xs)))
 waitAll' xs = liftIO $ let evs = getEvents xs
                        in do _ <- clWaitForEvents evs

@@ -45,18 +45,18 @@ instance HasCLMem (CLBuffer a) where
   getCLMem (CLBuffer _ m) = m
 
 -- | Allocate a new buffer object of the given number of elements.
-allocBuffer :: forall a m. (Storable a, CL' m)
+allocBuffer :: forall a m. (Storable a, HasCL m)
             => [CLMemFlag] -> Int -> m (CLBuffer a)
-allocBuffer flags n = 
+allocBuffer flags n =
   do s <- ask
      fmap (CLBuffer n) . liftIO $ initOutputBuffer s flags numBytes
   where numBytes = n * sizeOf (undefined::a)
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it.
-initBuffer :: forall a m. (Storable a, CL' m)
+initBuffer :: forall a m. (Storable a, HasCL m)
            => [CLMemFlag] -> V.Vector a -> m (CLBuffer a)
-initBuffer flags v = 
+initBuffer flags v =
   do c <- clContext <$> ask
      fmap (CLBuffer (V.length v)) . liftIO . V.unsafeWith v $
        clCreateBuffer c flags . (sz,) . castPtr
@@ -64,7 +64,7 @@ initBuffer flags v =
 
 -- | @readBuffer' mem n events@ reads back a 'Vector' of @n@ elements
 -- from the buffer object @mem@ after waiting for @events@ to finish.
-readBufferAsync' :: forall a m. (Storable a, CL' m)
+readBufferAsync' :: forall a m. (Storable a, HasCL m)
                  => CLBuffer a -> Int -> [CLEvent]
                  -> m (CLAsync (V.Vector a))
 readBufferAsync' (CLBuffer n' mem) n waitForIt =
@@ -82,24 +82,24 @@ readBufferAsync' (CLBuffer n' mem) n waitForIt =
 
 -- | @readBuffer' buf n events@ performs a blocking read of the first
 -- @n@ elements of a buffer after waiting for @events@.
-readBuffer' :: (Storable a, CL' m)
+readBuffer' :: (Storable a, HasCL m)
             => CLBuffer a -> Int -> [CLEvent] -> m (V.Vector a)
 readBuffer' buf n waitForIt = readBufferAsync' buf n waitForIt >>= waitOne
 
 -- | @readBuffer mem@ reads back a 'Vector' containing all the data
 -- stored in a 'CLBuffer'.
-readBuffer :: (Storable a, CL' m) => CLBuffer a -> m (V.Vector a)
+readBuffer :: (Storable a, HasCL m) => CLBuffer a -> m (V.Vector a)
 readBuffer b@(CLBuffer n _) = readBuffer' b n []
 
 -- | Perform a non-blocking read of an buffer's entire contents.
-readBufferAsync :: (Storable a, CL' m) => CLBuffer a -> m (CLAsync (V.Vector a))
+readBufferAsync :: (Storable a, HasCL m) => CLBuffer a -> m (CLAsync (V.Vector a))
 readBufferAsync b@(CLBuffer n _) = readBufferAsync' b n []
 
 -- | Write a 'Vector''s contents to a buffer object. This operation
 -- is non-blocking.
-writeBufferAsync :: forall a m. (Storable a, CL' m)
+writeBufferAsync :: forall a m. (Storable a, HasCL m)
                  => CLBuffer a -> V.Vector a -> m (CLAsync ())
-writeBufferAsync (CLBuffer n mem) v = 
+writeBufferAsync (CLBuffer n mem) v =
   do when (V.length v > n)
           (throwError "writeBuffer: Vector is bigger than the CLBuffer")
      q <- clQueue <$> ask
@@ -109,7 +109,7 @@ writeBufferAsync (CLBuffer n mem) v =
   where sz = V.length v * sizeOf (undefined::a)
 
 -- | Perform a blocking write of a 'Vector's contents to a buffer object.
-writeBuffer :: (Storable a, CL' m) => CLBuffer a -> V.Vector a -> m ()
+writeBuffer :: (Storable a, HasCL m) => CLBuffer a -> V.Vector a -> m ()
 writeBuffer b v = writeBufferAsync b v >>= waitOne
 
 -- | Create a read-only 'CLBuffer' that shares an underlying pointer
@@ -117,9 +117,9 @@ writeBuffer b v = writeBufferAsync b v >>= waitOne
 -- typically used to have an OpenCL kernel directly read from a
 -- vector. If the OpenCL context can not directly use the pointer,
 -- this will raise a runtime error!
-withSharedVector :: forall a r m. (Storable a, CL' m)
+withSharedVector :: forall a r m. (Storable a, HasCL m)
                  => V.Vector a -> (CLBuffer a -> m r) -> m r
-withSharedVector v go = 
+withSharedVector v go =
   do ctx <- clContext <$> ask
      mem <- liftIO . V.unsafeWith v $ \ptr ->
        clCreateBuffer ctx [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR]
@@ -134,7 +134,7 @@ withSharedVector v go =
 -- buffer. This is typically used to have an OpenCL kernel write
 -- directly to a Haskell vector. If the OpenCL context can not
 -- directly use the pointer, this will raise a runtime error!
-withSharedMVector :: forall a r m. (Storable a, CL' m)
+withSharedMVector :: forall a r m. (Storable a, HasCL m)
                   => VM.IOVector a -> (CLBuffer a -> m r) -> m r
 withSharedMVector v go =
   do ctx <- clContext <$> ask
@@ -153,12 +153,12 @@ withSharedMVector v go =
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out. The 'CLMapFlag's supplied determine if we have
 -- read-only, write-only, or read/write access to the 'VM.MVector'.
-withBufferAsync_ :: forall a r m. (Storable a, CL' m)
+withBufferAsync_ :: forall a r m. (Storable a, HasCL m)
                  => [CLMapFlag] -> CLBuffer a
                  -> (forall s. VM.MVector s a -> ST s r) -> m (m r)
 withBufferAsync_ flags (CLBuffer n mem) f =
   do q <- clQueue <$> ask
-     liftIO $ 
+     liftIO $
        do done <- newEmptyMVar
           _ <- forkIO $ do
                  (ev,ptr) <- clEnqueueMapBuffer q mem True flags 0 sz []
@@ -184,7 +184,7 @@ withBufferAsync_ flags (CLBuffer n mem) f =
 -- require hanging onto a reference to the vector data, as this
 -- reference will not be valid. Returning the vector itself is right
 -- out.
-withBufferRWAsync :: (Storable a, CL' m)
+withBufferRWAsync :: (Storable a, HasCL m)
                   => CLBuffer a -> (forall s. VM.MVector s a -> ST s r)
                   -> m (m r)
 withBufferRWAsync = withBufferAsync_ [CL_MAP_READ, CL_MAP_WRITE]
@@ -194,7 +194,7 @@ withBufferRWAsync = withBufferAsync_ [CL_MAP_READ, CL_MAP_WRITE]
 -- require hanging onto a reference to the vector data, as this
 -- reference will not be valid. Returning the vector itself is right
 -- out.
-withBufferRW :: (Storable a, CL' m)
+withBufferRW :: (Storable a, HasCL m)
              => CLBuffer a -> (forall s. VM.MVector s a -> ST s r) -> m r
 withBufferRW img f = withBufferRWAsync img f >>= id
 
@@ -204,9 +204,9 @@ withBufferRW img f = withBufferRWAsync img f >>= id
 -- sufficient to not require hanging onto a reference to the vector
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out.
-withBufferAsync :: (Storable a, CL' m)
+withBufferAsync :: (Storable a, HasCL m)
                 => CLBuffer a -> (V.Vector a -> r) -> m (m r)
-withBufferAsync img f = 
+withBufferAsync img f =
   withBufferAsync_ [CL_MAP_READ] img (fmap f . V.unsafeFreeze)
 
 -- | Provides read/write access to a memory-mapped 'V.Vector' of a
@@ -215,5 +215,5 @@ withBufferAsync img f =
 -- sufficient to not require hanging onto a reference to the vector
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out.
-withBuffer :: (Storable a, CL' m) => CLBuffer a -> (V.Vector a -> r) -> m r
+withBuffer :: (Storable a, HasCL m) => CLBuffer a -> (V.Vector a -> r) -> m r
 withBuffer img f = withBufferAsync img f >>= id

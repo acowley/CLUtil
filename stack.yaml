@@ -1,19 +1,16 @@
-resolver: lts-8.15
+resolver: lts-10.0
 
 packages:
 - .
 
-# These are to support macOS Sierra for which a change to language-c
-# is needed. See: <https://github.com/visq/language-c/pull/35>
-- location: ../language-c/
-  extra-dep: true
-- location: ../c2hs/
-  extra-dep: true
-
 extra-deps:
 - OpenCL-1.0.3.4
+- c2hs-0.28.3
+- language-c-0.7.1
 
-flags: {}
+flags:
+  CLUtil:
+    demos: true
 
 extra-package-dbs: []
 

@@ -4,7 +4,6 @@
 -- 'Vector's when running the OpenCL kernel on the CPU.
 module CLUtil.KernelArgsCL (KernelArgsCL, runKernel) where
 import Control.Monad (void, when)
-import Data.Either (partitionEithers)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
 import Foreign.Concurrent (newForeignPtr)
@@ -17,24 +16,6 @@ import CLUtil.State
 import CLUtil.VectorBuffers
 import Control.Parallel.OpenCL
 
--- NOTE: This is adapted from KernelArgsCPS. The only change is to
--- push the use of the 'OpenCLState' value to final kernel execution
--- so that this kernel-running interface fits in better with use of
--- the 'CL' monad.
-
--- In this variation, reading an output is an action that maps the
--- OpenCL buffer, and provides a ForeignPtr and the number of elements
--- in the output vector.
-data PostExec = ReadOutput (IO (IO (ForeignPtr ()), Int))
-              | FreeInput (IO ())
-
-postToEither :: PostExec -> Either (IO (IO (ForeignPtr ()), Int)) (IO ())
-postToEither (ReadOutput r) = Left r
-postToEither (FreeInput m) = Right m
-
-partitionPost :: [PostExec] -> ([IO (IO (ForeignPtr ()), Int)], [IO ()])
-partitionPost = partitionEithers . map postToEither
-
 -- We want to write something like this when dealing with a Vector
 -- argument...
 -- \cont ->
@@ -44,7 +25,6 @@ partitionPost = partitionEithers . map postToEither
 --   clSetKernelArg k arg b
 --   cont (FreeInput (void (clReleaseMemObject b)):)
 -- where sz = V.length v * sizeOf (undefined::a)
-
 
 -- The continuation of a buffer preperation step is a function takes
 -- an 'OpenCLState' and a list of element sizes, and returns an action
@@ -59,11 +39,6 @@ type PrepCont = (OpenCLState -> [Int] -> IO (Maybe PostExec, [Int]))
 -- allocate memory, or just grab a pointer), then run the
 -- continuation.
 type PrepExec = PrepCont -> IO [PostExec]
-
--- Wrap an output buffer in a 'Vector'.
-mkRead :: Storable a => (IO (ForeignPtr ()), Int) -> IO (Vector a)
-mkRead (getPtr,num) = flip V.unsafeFromForeignPtr0 num . castForeignPtr
-                      <$> getPtr
 
 -- | Implementation of a variable arity technique similar to
 -- "Text.Printf".
@@ -100,7 +75,7 @@ runCPS outputSizes s k n wg prep =
 
 -- Synchronous execution of a kernel with no automatic outputs. This
 -- is useful for kernels that modify user-managed buffers.
-instance {-# OVERLAPPABLE #-} CL' m => KernelArgsCL (m ()) where
+instance {-# OVERLAPPABLE #-} HasCL m => KernelArgsCL (m ()) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o,cleanup) <- runCPS [] s k n wg prep
@@ -110,7 +85,7 @@ instance {-# OVERLAPPABLE #-} CL' m => KernelArgsCL (m ()) where
 
 -- Execute a kernel where the calling context is expecting a single
 -- 'Vector' return value.
-instance {-# OVERLAPPABLE #-} forall a m. (Storable a, CL' m) => KernelArgsCL (m (Vector a)) where
+instance {-# OVERLAPPABLE #-} forall a m. (Storable a, HasCL m) => KernelArgsCL (m (Vector a)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
       (o,cleanup) <- runCPS [sizeOf (undefined::a)] s k n wg prep
@@ -124,7 +99,7 @@ instance {-# OVERLAPPABLE #-} forall a m. (Storable a, CL' m) => KernelArgsCL (m
 
 -- Execute a kernel where the calling context is expecting two
 -- 'Vector' return values.
-instance {-# OVERLAPPABLE #-} forall a b m. (Storable a, Storable b, CL' m) =>
+instance {-# OVERLAPPABLE #-} forall a b m. (Storable a, Storable b, HasCL m) =>
   KernelArgsCL (m (Vector a, Vector b)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do
@@ -141,7 +116,7 @@ instance {-# OVERLAPPABLE #-} forall a b m. (Storable a, Storable b, CL' m) =>
 
 -- Execute a kernel where the calling context is expecting three
 -- 'Vector' return values.
-instance {-# OVERLAPPABLE #-} forall a b c m. (Storable a, Storable b, Storable c, CL' m) =>
+instance {-# OVERLAPPABLE #-} forall a b c m. (Storable a, Storable b, Storable c, HasCL m) =>
   KernelArgsCL (m (Vector a, Vector b, Vector c)) where
   setArgCL k _ (Just n) wg prep = ask >>= \s ->
     liftIO $ do

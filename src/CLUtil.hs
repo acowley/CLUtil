@@ -6,25 +6,26 @@ module CLUtil (
   ezRelease, clReleaseDevice, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, CL', runCL,
+  CL, HasCL, runCL,
 
   -- * Managing images and buffers
   HasCLMem(getCLMem),
 
   -- * Kernels
-  KernelArgsCL, runKernel, runKernelAsync,
+  loadProgram, loadProgramFile, kernelFromFile,
+  KernelArgs, runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
   ask, throwError, liftIO,
 
   -- * Buffer Objects
-  CLBuffer(..), allocBuffer, initBuffer, 
+  CLBuffer(..), allocBuffer, initBuffer, withBuffer,
   readBuffer, readBuffer', writeBuffer, withSharedVector, withSharedMVector,
 
   -- * Image Objects
   CLImage(..), allocImage, initImage,
   readImage, readImage', writeImage, copyImage,
-  NumChan(..), HalfFloat, 
+  NumChan(..), HalfFloat,
   NormInt8(..), NormWord8(..), NormInt16(..), NormWord16(..),
   CLImage1, CLImage2, CLImage3, CLImage4,
 
@@ -37,12 +38,13 @@ module CLUtil (
   readImageAsync', readImageAsync, copyImageAsync,
   writeImageAsync, readBufferAsync, readBufferAsync', writeBufferAsync,
 
-  -- * OpenCL kernel arguments
+   -- * OpenCL kernel arguments
   OutputSize(..), NumWorkItems(..), WorkGroup(..),
   LocalMem(..), localFloat, localDouble, localInt, localWord32, vectorDup,
 
   -- * Re-exports for convenience
-  module Control.Parallel.OpenCL, Vector, CInt, CFloat, Word8, Storable
+  module Control.Parallel.OpenCL, Vector,
+  CInt, CFloat, Word8, Word16, Word32, Int8, Int16, Int32, Storable
   ) where
 import Control.Parallel.OpenCL
 import Data.Vector.Storable (Vector)
@@ -53,11 +55,14 @@ import CLUtil.Initialization
 import CLUtil.Buffer
 import CLUtil.Image
 import CLUtil.BufferImageInterop
-import CLUtil.KernelArgsCL
-import CLUtil.KernelArgsCLAsync (runKernelAsync)
-import CLUtil.KernelArgTypes
+-- import CLUtil.KernelArgsCL
+-- import CLUtil.KernelArgsCLAsync (runKernelAsync)
+import CLUtil.KernelArgs
 import CLUtil.State
 import CLUtil.Async
 
-import Data.Word (Word8)
+import CLUtil.Load
+
+import Data.Int
+import Data.Word
 import Foreign.Storable (Storable)

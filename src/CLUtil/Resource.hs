@@ -13,14 +13,14 @@ module CLUtil.Resource (
   ezRelease, clReleaseDevice, OpenCLState(..),
 
   -- * Running OpenCL computations
-  CL, CL', runCL, runCL', runCLIO, runCLClean, nestCL,
+  CL, HasCL, runCL, runCL', runCLIO, runCLClean, nestCL,
 
   -- * Mangaging images and buffers
   HasCLMem(getCLMem), Cleanup, registerCleanup, unregisterCleanup, ReleaseKey,
   runCleanup, releaseItem, CLReleasable(releaseObject), newCleanup, HasCleanup,
 
   -- * Kernels
-  KernelArgsCL, runKernel, runKernelAsync,
+  KernelArgs, runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
   ask, throwError, liftIO,
@@ -67,7 +67,7 @@ module CLUtil.Resource (
 -}
   ) where
 import CLUtil hiding (allocBuffer, initBuffer, allocImage, initImage,
-                      CL, CL', runCL)
+                      CL, HasCL, runCL)
 import qualified CLUtil.Buffer as B
 import qualified CLUtil.CL as R
 import CLUtil.Image hiding (allocImageFmt, allocImage, initImageFmt, initImage)
@@ -101,7 +101,7 @@ instance HasCleanup (Cleanup,b) where
   cleanupl = _1
 
 -- | A constraint corresponding to features supported by 'CL'.
-type CL' s m = (MonadState s m, HasCleanup s, R.CL' m)
+type HasCL s m = (MonadState s m, HasCleanup s, R.HasCL m)
 
 -- | This is a somewhat dangerous 'Monoid' instance. If you have two
 -- independently created 'Cleanup' values, and you have held on to
@@ -126,7 +126,7 @@ runCleanup :: Cleanup -> IO ()
 runCleanup (Cleanup _ m) = sequenceA_ m
 
 -- | Register a cleanup action.
-registerCleanup :: CL' s m => IO () -> m ReleaseKey
+registerCleanup :: HasCL s m => IO () -> m ReleaseKey
 registerCleanup m = do i <- use (cleanupl . nextReleaseKey)
                        cleanupl . releaseMap . at i .= Just m
                        cleanupl . nextReleaseKey += 1
@@ -134,13 +134,13 @@ registerCleanup m = do i <- use (cleanupl . nextReleaseKey)
 
 -- | Return a previously-registered cleanup action without running
 -- it. This returns control over this resource to the caller.
-unregisterCleanup :: CL' s m => ReleaseKey -> m (Maybe (IO ()))
+unregisterCleanup :: HasCL s m => ReleaseKey -> m (Maybe (IO ()))
 unregisterCleanup k = do m <- use (cleanupl . releaseMap . at k)
                          cleanupl . releaseMap . at k .= Nothing
                          return m
 
 -- | Run a previously-registered cleanup action. It will not be run again.
-releaseItem :: CL' s m => ReleaseKey -> m ()
+releaseItem :: HasCL s m => ReleaseKey -> m ()
 releaseItem k = do use (cleanupl . releaseMap . at k) >>= liftIO . sequenceA_
                    cleanupl . releaseMap . at k .= Nothing
 
@@ -185,7 +185,7 @@ instance CLReleasable (CLImage n a) where
 
 -- | Allocate a new 2D or 3D image of the given dimensions and
 -- format. The image is registered for cleanup.
-allocImageFmt :: (Integral a, Functor f, Foldable f, ValidImage n b, CL' s m)
+allocImageFmt :: (Integral a, Functor f, Foldable f, ValidImage n b, HasCL s m)
               => [CLMemFlag] -> CLImageFormat -> f a
               -> m (CLImage n b, ReleaseKey)
 allocImageFmt flags fmt dims =
@@ -200,7 +200,7 @@ allocImageFmt flags fmt dims =
 -- cleanup, and the key used to perform an early cleanup of the image
 -- is returned.
 allocImageKey :: forall f a n b m s.
-                 (Integral a, Foldable f, Functor f, ValidImage n b, CL' s m)
+                 (Integral a, Foldable f, Functor f, ValidImage n b, HasCL s m)
               => [CLMemFlag] -> f a -> m (CLImage n b, ReleaseKey)
 allocImageKey flags = allocImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
@@ -210,7 +210,7 @@ allocImageKey flags = allocImageFmt flags fmt
 -- 'CLImage OneChan Float' is associated with a default format of
 -- 'CLImageFormat CL_R CL_FLOAT') . The image is registered for
 -- cleanup.
-allocImage :: (Integral a, Functor f, Foldable f, ValidImage n b, CL' s m)
+allocImage :: (Integral a, Functor f, Foldable f, ValidImage n b, HasCL s m)
            => [CLMemFlag] -> f a -> m (CLImage n b)
 allocImage flags = fmap fst . allocImageKey flags
 
@@ -222,7 +222,7 @@ allocImage flags = fmap fst . allocImageKey flags
 -- 3 times the number of pixels. The image is /not/ registered for
 -- cleanup.
 initImageFmt :: (Integral a, Functor f, Foldable f, Storable b, ValidImage n b,
-                 CL' s m)
+                 HasCL s m)
              => [CLMemFlag] -> CLImageFormat -> f a -> V.Vector b
              -> m (CLImage n b, ReleaseKey)
 initImageFmt flags fmt dims v =
@@ -237,7 +237,7 @@ initImageFmt flags fmt dims v =
 -- used to perform an early cleanup of the image is returned.
 initImageKey :: forall f a n b m s.
                 (Integral a, Foldable f, Functor f, ValidImage n b, Storable b,
-                 CL' s m)
+                 HasCL s m)
              => [CLMemFlag] -> f a -> V.Vector b -> m (CLImage n b, ReleaseKey)
 initImageKey flags = initImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
@@ -247,7 +247,7 @@ initImageKey flags = initImageFmt flags fmt
 -- type. See 'initImage'' for more information on requirements of the
 -- input 'Vector'. The image is registered for cleanup.
 initImage :: (Integral a, Foldable f, Functor f, ValidImage n b, Storable b,
-              CL' s m)
+              HasCL s m)
           => [CLMemFlag] -> f a -> V.Vector b -> m (CLImage n b)
 initImage flags = (fmap fst .) . initImageKey flags
 
@@ -259,7 +259,7 @@ instance CLReleasable (CLBuffer a) where
 -- | Allocate a new buffer object of the given number of elements. The
 -- buffer is registered for cleanup, and the key used to perform an
 -- early cleanup of the buffer is returned.
-allocBufferKey :: (Storable a, CL' s m)
+allocBufferKey :: (Storable a, HasCL s m)
                => [CLMemFlag] -> Int -> m (CLBuffer a, ReleaseKey)
 allocBufferKey flags n = do b <- B.allocBuffer flags n
                             k <- registerCleanup $ () <$ releaseObject b
@@ -267,13 +267,13 @@ allocBufferKey flags n = do b <- B.allocBuffer flags n
 
 -- | Allocate a new buffer object of the given number of elements. The
 -- buffer is registered for cleanup.
-allocBuffer :: (Storable a, CL' s m) => [CLMemFlag] -> Int -> m (CLBuffer a)
+allocBuffer :: (Storable a, HasCL s m) => [CLMemFlag] -> Int -> m (CLBuffer a)
 allocBuffer flags n = fst <$> allocBufferKey flags n
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is registered for cleanup, and the key used to
 -- perform an early cleanup of the buffer is returned.
-initBufferKey :: (Storable a, CL' s m)
+initBufferKey :: (Storable a, HasCL s m)
               => [CLMemFlag] -> V.Vector a -> m (CLBuffer a, ReleaseKey)
 initBufferKey flags v = do b <- B.initBuffer flags v
                            k <- registerCleanup $ () <$ releaseObject b
@@ -281,6 +281,6 @@ initBufferKey flags v = do b <- B.initBuffer flags v
 
 -- | Allocate a new buffer object and write a 'Vector''s contents to
 -- it. The buffer is registered for cleanup.
-initBuffer :: (Storable a, CL' s m)
+initBuffer :: (Storable a, HasCL s m)
            => [CLMemFlag] -> V.Vector a -> m (CLBuffer a)
 initBuffer flags v = fst <$> initBufferKey flags v

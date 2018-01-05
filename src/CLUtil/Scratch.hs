@@ -2,7 +2,6 @@
 -- | Helpers for working with scratch memory. See 'scratchImage' for a
 -- discussion of applicability.
 module CLUtil.Scratch where
-import Control.Applicative
 import CLUtil.Resource
 import CLUtil.Image (ValidImage)
 import Data.IORef
@@ -23,7 +22,7 @@ import Linear (V2(..))
 -- provided as input to the returned function is of a different size
 -- to the previous invocation, then the old output 'CLImage' is
 -- released, and a new one is allocated.
-scratchImage :: CL' s m => ValidImage d a => IO (CLImage d a -> m (CLImage d a))
+scratchImage :: HasCL s m => ValidImage d a => IO (CLImage d a -> m (CLImage d a))
 scratchImage = aux <$> newIORef Nothing
   where aux r img =
           let (w,h,_) = imageDims img
@@ -39,7 +38,7 @@ scratchImage = aux <$> newIORef Nothing
 -- | Similar to 'scratchImage' but returns /two/ scratch images. This
 -- is helpful if a processing stage is implemented in two passes
 -- that bounce back and forth (ping-pong).
-pingPongImage :: (ValidImage d a, CL' s m)
+pingPongImage :: (ValidImage d a, HasCL s m)
               => IO (CLImage d a -> m (V2 (CLImage d a)))
 pingPongImage = do p1 <- scratchImage
                    p2 <- scratchImage

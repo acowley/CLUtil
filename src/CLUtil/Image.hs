@@ -43,7 +43,7 @@ import Control.Parallel.OpenCL
 -- | The number of channels for image types.
 data NumChan = OneChan | TwoChan | ThreeChan | FourChan
 
--- | An uninhabited type that corresponds to OpenCL's @CL_HALF_FLOAT@
+-- | An uninhabited type that corresponds to OpenHasCLs @CL_HALF_FLOAT@
 -- type.
 data HalfFloat
 
@@ -53,25 +53,25 @@ instance Storable HalfFloat where
   peek _ = error "HalfFloat is uninhabited"
   poke _ _ = error "HalfFloat is uninhabited"
 
--- | A type corresponding to OpenCL's normalized signed 8-bit
+-- | A type corresponding to OpenHasCLs normalized signed 8-bit
 -- integer. Values of this type are represented in Haskell as 'Int8',
 -- but in an OpenCL kernel will take on values between zero and one.
 newtype NormInt8 = NormInt8 Int8
   deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
--- | A type corresponding to OpenCL's normalized unsigned 8-bit
+-- | A type corresponding to OpenHasCLs normalized unsigned 8-bit
 -- integer. Values of this type are represented in Haskell as 'Word8',
 -- but in an OpenCL kernel will take on values between zero and one.
 newtype NormWord8 = NormWord8 Word8
   deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
--- | A type corresponding to OpenCL's normalized signed 16-bit
+-- | A type corresponding to OpenHasCLs normalized signed 16-bit
 -- integer. Values of this type are represented in Haskell as 'Int16',
 -- but in an OpenCL kernel will take on values between zero and one.
 newtype NormInt16 = NormInt16 Int16
   deriving (Num, Show, Real, Integral, Eq, Enum, Bounded, Ord, Storable)
 
--- | A type corresponding to OpenCL's normalized unsigned 16-bit
+-- | A type corresponding to OpenHasCLs normalized unsigned 16-bit
 -- integer. Values of this type are represented in Haskell as
 -- 'Word16', but in an OpenCL kernel will take on values between zero
 -- and one.
@@ -211,7 +211,7 @@ defaultFormat _ = CLImageFormat (defaultChan (Proxy::Proxy n))
 
 -- | Raise an error in if a 'CLImageFormat' is not compatible with a
 -- 'CLImage' type.
-imageCompatible :: forall n b m. (ValidImage n b, CL' m)
+imageCompatible :: forall n b m. (ValidImage n b, HasCL m)
                 => CLImageFormat -> Proxy (CLImage n b) -> m ()
 imageCompatible (CLImageFormat order dtype) _
   | not (chanCompatible (Proxy::Proxy n) order) =
@@ -229,7 +229,7 @@ type ValidImage n b = (ChanCompatible n, ChanSize n, TypeCompatible b)
 -- | Allocate a new 2D or 3D image of the given dimensions and
 -- format. The image is /not/ registered for cleanup.
 allocImageFmt :: forall a f n b m.
-                 (Integral a, Foldable f, Functor f, ValidImage n b, CL' m)
+                 (Integral a, Foldable f, Functor f, ValidImage n b, HasCL m)
               => [CLMemFlag] -> CLImageFormat -> f a -> m (CLImage n b)
 allocImageFmt flags fmt dims =
   do imageCompatible fmt (Proxy::Proxy (CLImage n b))
@@ -248,7 +248,7 @@ allocImageFmt flags fmt dims =
 -- cleanup, and the key used to perform an early cleanup of the image
 -- is returned.
 allocImage :: forall f a n b m.
-              (Integral a, Foldable f, Functor f, ValidImage n b, CL' m)
+              (Integral a, Foldable f, Functor f, ValidImage n b, HasCL m)
            => [CLMemFlag] -> f a -> m (CLImage n b)
 allocImage flags = allocImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
@@ -261,7 +261,7 @@ allocImage flags = allocImageFmt flags fmt
 -- 3 times the number of pixels.
 initImageFmt :: forall a f n b m.
                 (Integral a, Foldable f, Functor f, Storable b, ValidImage n b,
-                 CL' m)
+                 HasCL m)
              => [CLMemFlag] -> CLImageFormat -> f a -> V.Vector b
              -> m (CLImage n b)
 initImageFmt flags fmt dims v =
@@ -282,7 +282,7 @@ initImageFmt flags fmt dims v =
 -- input 'Vector'.
 initImage :: forall a f n b m.
              (Integral a, Foldable f, Functor f, ValidImage n b, Storable b,
-              CL' m)
+              HasCL m)
           => [CLMemFlag] -> f a -> V.Vector b -> m (CLImage n b)
 initImage flags = initImageFmt flags fmt
   where fmt = defaultFormat (Proxy::Proxy (CLImage n b))
@@ -292,7 +292,7 @@ initImage flags = initImageFmt flags fmt
 -- pixels must be unpacked into a flat array. This means that, if you
 -- want to upload RGBA pixels to a 2D image, you must provide a
 -- 'Vector CFloat' of length @4 * imageWidth * imageHeight@.
-writeImageAsync :: forall n a m. (Storable a, ChanSize n, CL' m)
+writeImageAsync :: forall n a m. (Storable a, ChanSize n, HasCL m)
                 => CLImage n a -> V.Vector a -> Blockers -> m (CLAsync ())
 writeImageAsync (CLImage dims@(w,h,d) mem) v bs =
   do q <- clQueue <$> ask
@@ -305,7 +305,7 @@ writeImageAsync (CLImage dims@(w,h,d) mem) v bs =
 
 -- | Perform a blocking write of a 'Vector''s contents to an
 -- image. See 'writeImageAsync' for more information.
-writeImage :: forall n a m. (Storable a, ChanSize n, CL' m)
+writeImage :: forall n a m. (Storable a, ChanSize n, HasCL m)
            => CLImage n a -> V.Vector a -> m ()
 --writeImage img v = writeImageAsync img v >>= waitOne
 writeImage (CLImage dims@(w,h,d) mem) v =
@@ -334,7 +334,7 @@ tripAll f (x,y,z) = f x && f y && f z
 -- the result of the read operation. See the
 -- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
 -- working with asynchronous computations.
-readImageAsync' :: forall n a m. (Storable a, ChanSize n, CL' m)
+readImageAsync' :: forall n a m. (Storable a, ChanSize n, HasCL m)
                 => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
                 -> m (CLAsync (V.Vector a))
 readImageAsync' (CLImage dims@(w,h,d) mem) origin region waitForIt =
@@ -356,7 +356,7 @@ readImageAsync' (CLImage dims@(w,h,d) mem) origin region waitForIt =
 -- the image @mem@ from coordinate @origin@ of size @region@
 -- (i.e. @region ~ (width,height,depth)@) after waiting for @events@
 -- to finish. This operation blocks until the operation is complete.
-readImage' :: (Storable a, ChanSize n, CL' m)
+readImage' :: (Storable a, ChanSize n, HasCL m)
            => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
            -> m (V.Vector a)
 readImage' img origin region waitForIt =
@@ -364,7 +364,7 @@ readImage' img origin region waitForIt =
 
 -- | Read the entire contents of an image into a 'Vector'. This
 -- operation blocks until the read is complete.
-readImage :: (Storable a, ChanSize n, CL' m) => CLImage n a -> m (V.Vector a)
+readImage :: (Storable a, ChanSize n, HasCL m) => CLImage n a -> m (V.Vector a)
 readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 
 -- | Non-blocking complete image read. The resulting 'CLAsync' value
@@ -372,7 +372,7 @@ readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 -- result of the read operation. See the
 -- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
 -- working with asynchronous computations.
-readImageAsync :: (Storable a, ChanSize n, CL' m)
+readImageAsync :: (Storable a, ChanSize n, HasCL m)
                => CLImage n a -> Blockers -> m (CLAsync (V.Vector a))
 readImageAsync img@(CLImage dims _) =
   readImageAsync' img (0,0,0) dims . getBlockers
@@ -384,7 +384,7 @@ readImageAsync img@(CLImage dims _) =
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out. The 'CLMapFlag's supplied determine if we have
 -- read-only, write-only, or read/write access to the 'VM.MVector'.
-withImageAsync_ :: forall n a r m. (ChanSize n, Storable a, CL' m)
+withImageAsync_ :: forall n a r m. (ChanSize n, Storable a, HasCL m)
                 => [CLMapFlag] -> CLImage n a
                 -> (forall s. VM.MVector s a -> ST s r) -> m (CLAsync r)
 withImageAsync_ flags (CLImage dims mem) f =
@@ -407,7 +407,7 @@ withImageAsync_ flags (CLImage dims mem) f =
 -- require hanging onto a reference to the vector data, as this
 -- reference will not be valid. Returning the vector itself is right
 -- out.
-withImageRWAsync :: (ChanSize n, Storable a, CL' m)
+withImageRWAsync :: (ChanSize n, Storable a, HasCL m)
                  => CLImage n a -> (forall s. VM.MVector s a -> ST s r)
                  -> m (CLAsync r)
 withImageRWAsync = withImageAsync_ [CL_MAP_READ, CL_MAP_WRITE]
@@ -427,7 +427,7 @@ withImageRW img f = withImageRWAsync img f >>= waitOne
 -- sufficient to not require hanging onto a reference to the vector
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out.
-withImageAsync :: (ChanSize n, Storable a, CL' m)
+withImageAsync :: (ChanSize n, Storable a, HasCL m)
                => CLImage n a -> (V.Vector a -> r) -> m (CLAsync r)
 withImageAsync img f =
   withImageAsync_ [CL_MAP_READ] img (fmap f . V.unsafeFreeze)
@@ -438,7 +438,7 @@ withImageAsync img f =
 -- sufficient to not require hanging onto a reference to the vector
 -- data, as this reference will not be valid. Returning the vector
 -- itself is right out.
-withImage :: (ChanSize n, Storable a, CL' m)
+withImage :: (ChanSize n, Storable a, HasCL m)
           => CLImage n a -> (V.Vector a -> r) -> m r
 withImage img f = withImageAsync img f >>= waitOne
 -- FIXME: Add some error checking to copyImageAsync to make sure the
@@ -447,7 +447,7 @@ withImage img f = withImageAsync img f >>= waitOne
 
 -- | @copyImageAsync src dst srcOrigin dstOrigin region@ enqueues an
 -- asynchronous copy from @src@ to @dst@.
-copyImageAsync :: CL' m
+copyImageAsync :: HasCL m
                => CLImage n a -> CLImage n a
                -> (Int,Int,Int) -> (Int,Int,Int) -> (Int,Int,Int)
                -> m (CLAsync ())
@@ -459,7 +459,7 @@ copyImageAsync src dst srcOrigin dstOrigin region =
         CLImage _dstDim dstMem = dst
 
 -- | @copyImage src dst@ copies from 'CLImage' @src@ to @dst@.
-copyImage :: CL' m => CLImage n a -> CLImage n a -> m ()
+copyImage :: HasCL m => CLImage n a -> CLImage n a -> m ()
 copyImage src@(CLImage sdims _) dst@(CLImage ddims _)
   | sdims /= ddims = throwError "copyImage's arguments must be the same size"
   | otherwise = copyImageAsync src dst (0,0,0) (0,0,0) sdims >>= waitOne

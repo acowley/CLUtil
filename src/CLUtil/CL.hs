@@ -3,13 +3,12 @@
 -- | A monad transformer stack for working with OpenCL. Includes a
 -- lightweight resource management layer in the style of the
 -- @resourcet@ package.
-module CLUtil.CL 
-  (CL, runCL, CL', ask, throwError, liftIO,
+module CLUtil.CL
+  (CL, runCL, HasCL, ask, throwError, liftIO,
    -- * Releasable objects and CLMem wrappers
    HasCLMem(..)
   ) where
 import CLUtil.State (OpenCLState)
-import Control.Applicative (Applicative)
 import Control.Monad.Except
 import Control.Monad.Reader
 import Control.Parallel.OpenCL (CLMem)
@@ -24,8 +23,7 @@ instance HasCLMem CLMem where
 type CL = ReaderT OpenCLState (ExceptT String IO)
 
 -- | A constraint corresponding to features supported by 'CL'.
-type CL' m = (MonadReader OpenCLState m, MonadError String m,
-              MonadIO m, Functor m, Applicative m)
+type HasCL m = (MonadReader OpenCLState m, MonadError String m, MonadIO m)
 
 -- | Run a 'CL' action with a given 'OpenCLState'. Any errors are
 -- raised by calling 'error'.

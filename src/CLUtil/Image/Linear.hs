@@ -23,7 +23,7 @@ import CLUtil.Image hiding
    initImageFmt, initImage,
    writeImageAsync, writeImage)
 import qualified CLUtil.Image as I
-import CLUtil.CL (CL')
+import CLUtil.CL (HasCL)
 import qualified CLUtil.Resource as Res
 import Control.Parallel.OpenCL
 import qualified Data.Foldable as F
@@ -39,7 +39,7 @@ type instance LinearChan 'ThreeChan = V3
 type instance LinearChan 'FourChan  = V4
 
 -- | Flatten a 'Vector' when the representation of @Vector (t a)@ and
--- @Vecor a@ are the same modulo differences in number of elements.
+-- @Vector a@ are the same modulo differences in number of elements.
 flatten :: (Storable a, Storable (t a)) => Vector (t a) -> Vector a
 flatten = V.unsafeCast
 
@@ -55,7 +55,7 @@ unflatten = V.unsafeCast
 -- cleanup.
 initImageFmtRes :: (Integral a, F.Foldable f, Functor f,
                     Storable b, Storable (LinearChan n b),
-                    ValidImage n b, Res.CL' s m)
+                    ValidImage n b, Res.HasCL s m)
                 => [CLMemFlag] -> CLImageFormat -> f a -> Vector (LinearChan n b)
                 -> m (CLImage n b)
 initImageFmtRes flags fmt dims =
@@ -69,7 +69,7 @@ initImageFmtRes flags fmt dims =
 -- 3 times the number of pixels.
 initImageFmt :: (Integral a, F.Foldable f, Functor f,
                  Storable b, Storable (LinearChan n b),
-                 ValidImage n b, CL' m)
+                 ValidImage n b, HasCL m)
              => [CLMemFlag] -> CLImageFormat -> f a -> Vector (LinearChan n b)
              -> m (CLImage n b)
 initImageFmt flags fmt dims = I.initImageFmt flags fmt dims . flatten
@@ -79,7 +79,7 @@ initImageFmt flags fmt dims = I.initImageFmt flags fmt dims . flatten
 -- type. See 'initImage'' for more information on requirements of the
 -- input 'Vector'.
 initImage :: (Integral a, F.Foldable f, Functor f, ValidImage n b,
-              Storable b, Storable (LinearChan n b), CL' m)
+              Storable b, Storable (LinearChan n b), HasCL m)
           => [CLMemFlag] -> f a -> Vector (LinearChan n b) -> m (CLImage n b)
 initImage flags dims = I.initImage flags dims . flatten
 
@@ -88,7 +88,7 @@ initImage flags dims = I.initImage flags dims . flatten
 -- type. See 'initImage'' for more information on requirements of the
 -- input 'Vector'. The image is registered for cleanup.
 initImageRes :: (Integral a, F.Foldable f, Functor f, ValidImage n b,
-                 Storable b, Storable (LinearChan n b), Res.CL' s m)
+                 Storable b, Storable (LinearChan n b), Res.HasCL s m)
              => [CLMemFlag] -> f a -> Vector (LinearChan n b) -> m (CLImage n b)
 initImageRes flags dims = Res.initImage flags dims . flatten
 
@@ -101,7 +101,7 @@ initImageRes flags dims = Res.initImage flags dims . flatten
 -- the result of the read operation. See the
 -- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
 -- working with asynchronous computations.
-readImageAsync' :: (Storable a, Storable (LinearChan n a), ChanSize n, CL' m)
+readImageAsync' :: (Storable a, Storable (LinearChan n a), ChanSize n, HasCL m)
                 => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
                 -> m (CLAsync (Vector (LinearChan n a)))
 readImageAsync' img origin region waitForIt =
@@ -111,7 +111,7 @@ readImageAsync' img origin region waitForIt =
 -- the image @mem@ from coordinate @origin@ of size @region@
 -- (i.e. @region ~ (width,height,depth)@) after waiting for @events@
 -- to finish. This operation blocks until the operation is complete.
-readImage' :: (Storable a, ChanSize n, Storable (LinearChan n a), CL' m)
+readImage' :: (Storable a, ChanSize n, Storable (LinearChan n a), HasCL m)
           => CLImage n a -> (Int,Int,Int) -> (Int,Int,Int) -> [CLEvent]
           -> m (Vector (LinearChan n a))
 readImage' img origin region waitForIt =
@@ -119,7 +119,7 @@ readImage' img origin region waitForIt =
 
 -- | Read the entire contents of an image into a 'Vector'. This
 -- operation blocks until the read is complete.
-readImage :: (Storable a, Storable (LinearChan n a), ChanSize n, CL' m)
+readImage :: (Storable a, Storable (LinearChan n a), ChanSize n, HasCL m)
           => CLImage n a -> m (Vector (LinearChan n a))
 readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 
@@ -128,7 +128,7 @@ readImage img@(CLImage dims _) = readImage' img (0,0,0) dims []
 -- result of the read operation. See the
 -- "Control.Parallel.CLUtil.Monad.Async" module for utilities for
 -- working with asynchronous computations.
-readImageAsync :: (Storable a, Storable (LinearChan n a), ChanSize n, CL' m)
+readImageAsync :: (Storable a, Storable (LinearChan n a), ChanSize n, HasCL m)
                 => CLImage n a -> m (CLAsync (Vector (LinearChan n a)))
 readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
 
@@ -137,20 +137,20 @@ readImageAsync img@(CLImage dims _) = readImageAsync' img (0,0,0) dims []
 -- pixels must be unpacked into a flat array. This means that, if you
 -- want to upload RGBA pixels to a 2D image, you must provide a
 -- 'Vector CFloat' of length @4 * imageWidth * imageHeight@.
-writeImageAsync :: (Storable a, Storable (LinearChan n a), ChanSize n, CL' m)
+writeImageAsync :: (Storable a, Storable (LinearChan n a), ChanSize n, HasCL m)
                 => CLImage n a -> Vector (LinearChan n a) -> Blockers
                 -> m (CLAsync ())
 writeImageAsync img = I.writeImageAsync img . flatten
 
 -- | Perform a blocking write of a 'Vector''s contents to an
 -- image. See 'writeImageAsync' for more information.
-writeImage :: (Storable a, Storable (LinearChan n a), ChanSize n, CL' m)
+writeImage :: (Storable a, Storable (LinearChan n a), ChanSize n, HasCL m)
            => CLImage n a -> Vector (LinearChan n a) -> m ()
 writeImage img = I.writeImage img . flatten
 
 -- | Copy a buffer to an image where each buffere element is a vector
 -- that maps into a multi-channel pixel type.
-copyBufferToImage :: forall n a m. CL' m
+copyBufferToImage :: forall n a m. HasCL m
                   => CLBuffer (LinearChan n a) -> CLImage n a -> m ()
 copyBufferToImage buf (CLImage dims obj) =
   B.copyBufferToImage buf (CLImage dims obj :: CLImage1 a)
