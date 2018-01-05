@@ -4,23 +4,23 @@ import Control.Monad (void)
 import Control.Parallel.OpenCL
 import CLUtil.State
 import Data.Traversable (traverse)
-import Foreign.Ptr (nullPtr)
 
 clStateInit :: CLDeviceID -> IO OpenCLState
 clStateInit dev =
   do context <- clCreateContext [] [dev] putStrLn
-     OpenCLState dev context `fmap` 
+     OpenCLState dev context `fmap`
        clCreateCommandQueue context dev []
                             -- [CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE]
 
 -- |Initialize the first device of the given type.
 ezInit :: CLDeviceType -> IO OpenCLState
-ezInit t = do (dev:_) <- clGetDeviceIDs nullPtr t
+ezInit t = do (platform:_) <- clGetPlatformIDs
+              (dev:_) <- clGetDeviceIDs platform t
               clStateInit dev
 
 -- |Release a context and command queue.
 ezRelease :: OpenCLState -> IO ()
-ezRelease (OpenCLState _ c q) = 
+ezRelease (OpenCLState _ c q) =
   void $ clReleaseContext c >> clReleaseCommandQueue q
 {-# DEPRECATED ezRelease "Use clReleaseDevice" #-}
 
@@ -41,8 +41,9 @@ clDeviceCPU = ezInit CL_DEVICE_TYPE_CPU
 -- distinguish between devices of the same type.
 clDeviceSelect :: CLDeviceType -> (CLDeviceID -> IO Bool)
                -> IO (Maybe OpenCLState)
-clDeviceSelect t f = clGetDeviceIDs nullPtr t
-                     >>= firstM >>= traverse clStateInit 
+clDeviceSelect t f = do (platform:_) <- clGetPlatformIDs
+                        devs <- clGetDeviceIDs platform t
+                        firstM devs >>= traverse clStateInit
   where firstM [] = return Nothing
         firstM (x:xs) = f x >>= \q -> case q of
                           True -> return $ Just x
