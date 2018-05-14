@@ -48,7 +48,7 @@ module CLUtil (
   CInt, CFloat, Word8, Word16, Word32, Int8, Int16, Int32, Storable,
 
   -- * Overload LoadProgram and KernelFromSource
-  OpenCLSource(..)
+  OpenCLSource(..), CLBuildOption(..)
   ) where
 import Control.Parallel.OpenCL
 import Data.Vector.Storable (Vector)
