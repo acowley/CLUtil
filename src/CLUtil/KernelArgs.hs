@@ -8,11 +8,17 @@ module CLUtil.KernelArgs (
   -- * Executing a kernel
   runKernel, runKernelAsync,
   -- * Input arguments
-  NumWorkItems(..), WorkGroup(..), KernelArgs,
+  NumWorkItems(..), WorkGroup(..), KernelArgs(..),
   -- * Local memory
   LocalMem(..), localFloat, localDouble, localInt, localWord32,
   -- * Output arguments
-  OutputSize(..), vectorDup
+  OutputSize(..), vectorDup,
+  -- * Kernel type parameters
+  KernelSized(..), KernelSync(..), KernelWorkGroups(..), NumOutputs(..),
+
+  addKernelArgument, addKernelOutput,
+  PostExec(..), stoPrepArg
+
 ) where
 import CLUtil.Async (CLAsync(..), clAsync, Blockers, getBlockers)
 import CLUtil.Buffer (CLBuffer)

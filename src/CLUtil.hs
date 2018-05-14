@@ -12,8 +12,9 @@ module CLUtil (
   HasCLMem(getCLMem),
 
   -- * Kernels
-  loadProgram, loadProgramFile, kernelFromFile,
-  KernelArgs, runKernel, runKernelAsync,
+  loadProgram, loadProgramFile, kernelFromFile, kernelFromSource,
+  loadProgramWOptions, kernelFromSourceWOptions,
+  KernelArgs(..), runKernel, runKernelAsync,
 
   -- * Operations in the @CL@ monad
   ask, throwError, liftIO,
@@ -44,7 +45,10 @@ module CLUtil (
 
   -- * Re-exports for convenience
   module Control.Parallel.OpenCL, Vector,
-  CInt, CFloat, Word8, Word16, Word32, Int8, Int16, Int32, Storable
+  CInt, CFloat, Word8, Word16, Word32, Int8, Int16, Int32, Storable,
+
+  -- * Overload LoadProgram and KernelFromSource
+  OpenCLSource(..)
   ) where
 import Control.Parallel.OpenCL
 import Data.Vector.Storable (Vector)

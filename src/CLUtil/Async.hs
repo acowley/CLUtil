@@ -15,7 +15,6 @@ module CLUtil.Async
 import Control.Arrow (first)
 import Control.Monad.IO.Class
 import Control.Parallel.OpenCL
-import Data.Monoid
 
 -- | A basic heterogenous list type.
 data HList :: [*] -> * where
@@ -42,9 +41,12 @@ releaseBlockers :: Blockers -> IO ()
 releaseBlockers bs = let evs = getBlockers bs
                      in clWaitForEvents evs >> mapM_ clReleaseEvent evs
 
+instance Semigroup (CLAsync ()) where
+  (<>) = sequenceAsync
+
 instance Monoid (CLAsync ()) where
   mempty = CLAsync ([], return ())
-  mappend = sequenceAsync
+
 
 instance Functor CLAsync where
   fmap f (CLAsync x) = CLAsync $ fmap (fmap f) x
