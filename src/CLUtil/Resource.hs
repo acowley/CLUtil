@@ -116,10 +116,13 @@ type HasCL s m = (MonadState s m, HasCleanup s, R.HasCL m)
 -- the cleanup action for another resource to run. This is a downside
 -- to stateful programming where we hold on to references
 -- (i.e. 'ReleaseKey's).
+
+instance Semigroup Cleanup where
+  Cleanup k1 m1 <> Cleanup k2 m2 = Cleanup (max k1 k2)
+                                           (IM.unionWith (>>) m1 m2)
+
 instance Monoid Cleanup where
   mempty = newCleanup
-  Cleanup k1 m1 `mappend` Cleanup k2 m2 = Cleanup (max k1 k2)
-                                                  (IM.unionWith (>>) m1 m2)
 
 type ReleaseKey = Int
 
