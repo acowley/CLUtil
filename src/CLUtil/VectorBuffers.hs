@@ -3,6 +3,7 @@
 -- memory buffers. See "CLUtil.Buffer" for a higher level interface.
 module CLUtil.VectorBuffers where
 import CLUtil.State
+import CLUtil.Buffer
 import Control.Parallel.OpenCL
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as V
@@ -13,16 +14,15 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable, sizeOf)
 
 -- |Fill an OpenCL memory buffer with a 'Vector'.
-vectorToBuffer :: forall a. Storable a => CLContext -> Vector a -> IO CLMem
-vectorToBuffer context v = 
+vectorToBuffer :: forall a. Storable a => CLContext -> Vector a -> IO (CLBuffer a)
+vectorToBuffer context v =
   V.unsafeWith v $ \ptr ->
     -- NOTE: If we use the host ptr, then operations on the CPU are
     -- much faster. But if the GC moves things around, the world will
     -- end.
-    clCreateBuffer context 
-                   [CL_MEM_READ_ONLY, CL_MEM_COPY_HOST_PTR] 
-                   (sz, castPtr ptr)
-  where sz = V.length v * sizeOf (undefined::a)
+    CLBuffer len <$> clCreateBuffer context [CL_MEM_READ_ONLY, CL_MEM_COPY_HOST_PTR] (sz, castPtr ptr)
+  where len = V.length v
+        sz = max 1 (len * sizeOf (undefined::a))
 
 -- | @writeVectorToBuffer s mem v@ writes the contents of 'Vector' @v@
 -- to the OpenCL buffer @mem@. This operation blocks until the write
@@ -53,27 +53,27 @@ writeVectorToImage state mem dims v =
 -- |Pass a function a buffer whose contents are the data underlying a
 -- 'Vector'. In OpenCL parlance, this creates an OpenCL buffer with
 -- the @CL_MEM_USE_HOST_PTR@ flag if the current device is a CPU.
-withVectorBuffer :: forall a b. Storable a => 
+withVectorBuffer :: forall a b. Storable a =>
                     OpenCLState -> Vector a -> (CLMem -> IO b) -> IO b
-withVectorBuffer state v k = 
+withVectorBuffer state v k =
   do isCPU <- any isCPUDevice `fmap` clGetDeviceType (clDevice state)
      V.unsafeWith v $ \ptr ->
        clCreateBuffer (clContext state)
                       (if isCPU
-                        then [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR] 
+                        then [CL_MEM_READ_ONLY, CL_MEM_USE_HOST_PTR]
                         else [CL_MEM_READ_ONLY, CL_MEM_COPY_HOST_PTR])
                       (sz, castPtr ptr) >>= k
-  where sz = V.length v * sizeOf (undefined::a)
+  where sz = (max 1 $ V.length v) * sizeOf (undefined::a)
         isCPUDevice CL_DEVICE_TYPE_CPU = True
         isCPUDevice _ = False
 
 -- |Read an OpenCL memory buffer into a 'Vector'.
-bufferToVector :: forall a. Storable a => 
+bufferToVector :: forall a. Storable a =>
                   CLCommandQueue -> CLMem -> Int -> [CLEvent] -> IO (Vector a)
-bufferToVector q mem count waitForIt = 
+bufferToVector q mem count waitForIt =
   do v <- VM.new count
      _ <- VM.unsafeWith v $ \ptr ->
-            do ev <- clEnqueueReadBuffer q mem True 0 sz 
+            do ev <- clEnqueueReadBuffer q mem True 0 sz
                                          (castPtr ptr) waitForIt
                _ <- clWaitForEvents [ev]
                clReleaseEvent ev
@@ -81,9 +81,9 @@ bufferToVector q mem count waitForIt =
   where sz = count * sizeOf (undefined::a)
 
 -- | Read an OpenCL image into a 'Vector'.
-imageToVector :: forall a. Storable a => 
+imageToVector :: forall a. Storable a =>
                   CLCommandQueue -> CLMem -> (Int,Int,Int) -> [CLEvent] -> IO (Vector a)
-imageToVector q mem dims waitForIt = 
+imageToVector q mem dims waitForIt =
   do v <- VM.new count
      _ <- VM.unsafeWith v $ \ptr ->
             do ev <- clEnqueueReadImage q mem True (0,0,0) dims 0 0
@@ -96,10 +96,10 @@ imageToVector q mem dims waitForIt =
 -- |Asynchronously read an OpenCL memory buffer into a new
 -- 'Vector'. The returned action blocks until the read is finished,
 -- then produces the 'Vector'.
-bufferToVectorAsync :: forall a b. (Storable a, Integral b) => 
-                  CLCommandQueue -> CLMem -> b -> [CLEvent] -> 
+bufferToVectorAsync :: forall a b. (Storable a, Integral b) =>
+                  CLCommandQueue -> CLMem -> b -> [CLEvent] ->
                   IO (IO (Vector a))
-bufferToVectorAsync q mem count waitForIt = 
+bufferToVectorAsync q mem count waitForIt =
   do ptr <- mallocBytes (count' * sizeOf (undefined::a))
      readEvent <- clEnqueueReadBuffer q mem False 0 sz (castPtr ptr) waitForIt
      return $ do _ <- clWaitForEvents [readEvent]
@@ -112,20 +112,20 @@ bufferToVectorAsync q mem count waitForIt =
 -- |Allocate a buffer and prepare an action to efficiently produce a
 -- vector from the buffer. This action should be run just once /after/
 -- you are done with the output buffer. For example, the following
--- example, 
--- 
+-- example,
+--
 -- > (getVector, buffer) <- initOutputVector cluState [] 100
--- 
+--
 -- allocates a 100 element OpenCL buffer, and produces an action,
 -- @getVector@, that can be used to produce a 'Vector' after all
 -- needed buffer manipulation is complete.
-initOutputVector :: forall a b. (Integral a, Storable b) => 
+initOutputVector :: forall a b. (Integral a, Storable b) =>
                     OpenCLState -> [CLMemFlag] -> a -> IO (IO (Vector b), CLMem)
-initOutputVector s flags n = 
+initOutputVector s flags n =
   do p <- mallocBytes (fromIntegral n * sizeOf(undefined::b))
-     b <- clCreateBuffer (clContext s) (CL_MEM_USE_HOST_PTR:flags) 
+     b <- clCreateBuffer (clContext s) (CL_MEM_USE_HOST_PTR:flags)
                          (n, castPtr p)
      let mkVec = do fp <- newForeignPtr finalizerFree p
-                    V.unsafeFreeze $ 
+                    V.unsafeFreeze $
                      VM.unsafeFromForeignPtr fp 0 (fromIntegral n)
      return (mkVec, b)
